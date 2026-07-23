@@ -308,29 +308,15 @@ public class PipelineParameterServiceImpl implements PipelineParameterService {
         String changedParamName = request.getChangedParamName();
         Set<String> affectedNames = findDownstreamDependents(changedParamName, nameToParam);
 
-        if (affectedNames.isEmpty()) {
-            // 没有下游参数受影响，返回空列表
-            return Collections.emptyList();
-        }
-
-        // 4. 拓扑排序受影响参数（保证被依赖的先计算）
-        List<PipelineParameter> affectedParams = new ArrayList<>();
-        for (String name : affectedNames) {
-            PipelineParameter p = nameToParam.get(name);
-            if (p != null) {
-                affectedParams.add(p);
-            }
-        }
-        List<PipelineParameter> sortedAffected = topologicalSort(affectedParams);
-
-        // 5. 先清除受影响参数的旧值（依赖参数变动后，下游参数需重置为默认值或清空）
+        // 4. 清除受影响参数的旧值（依赖参数变动后，下游参数需重置为默认值或清空）
         for (String affectedName : affectedNames) {
             resolvedValues.remove(affectedName);
         }
 
-        // 6. 对受影响的参数重新计算（system 参数值来自流水线上下文，不随用户参数变动而改变，跳过）
-        for (PipelineParameter param : sortedAffected) {
-            if (ParamTypeEnum.SYSTEM.getCode().equals(param.getParamType())) {
+        // 5. 拓扑排序全部参数，逐个重新计算（已有值的跳过，被清除值的重新计算）
+        List<PipelineParameter> sortedParams = topologicalSort(allParams);
+        for (PipelineParameter param : sortedParams) {
+            if (resolvedValues.containsKey(param.getName())) {
                 continue;
             }
             String value = resolveParamValue(param, context);
@@ -339,10 +325,15 @@ public class PipelineParameterServiceImpl implements PipelineParameterService {
             }
         }
 
-        // 7. 返回受影响的 user 参数（含重新计算的值和过滤后的选项）
-        return sortedAffected.stream()
+        // 6. 返回全量 user 参数（含重新计算的值和过滤后的选项）
+        return sortedParams.stream()
                 .filter(p -> !ParamTypeEnum.SYSTEM.getCode().equals(p.getParamType()))
                 .map(p -> toRunParameterResponse(p, resolvedValues))
+                .sorted(Comparator
+                        .comparing(PipelineRunParameterResponse::getParamGroup,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(PipelineRunParameterResponse::getParamGroupSort,
+                                Comparator.nullsLast(Comparator.naturalOrder())))
                 .collect(Collectors.toList());
     }
 
