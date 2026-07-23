@@ -50,12 +50,11 @@ public interface PipelineParameterService {
 
     /**
      * 刷新流水线执行参数（参数联动刷新）。
-     * <p>当某个标记了 refreshOnChanged 的参数值变动时，重新计算受影响的下游参数（值和选项），
-     * 下游参数旧值会被清除后重新计算（重置为默认值或清空），
-     * 只返回受影响的 user 参数列表（前端局部更新）。
+     * <p>当某个标记了 refreshOnChanged 的参数值变动时，清除其下游参数的旧值（重置为默认值或清空），
+     * 然后重新计算全部参数，返回全量 user 参数列表（前端整体替换）。
      *
      * @param request 刷新请求（含 pipelineId、变动参数名和当前所有参数值）
-     * @return 受影响的 user 参数列表（含重新计算的值和过滤后的选项）
+     * @return 全量 user 参数列表（含重新计算的值和过滤后的选项）
      */
     List<PipelineRunParameterResponse> refreshParameters(PipelineParametersRefreshRequest request);
 }
