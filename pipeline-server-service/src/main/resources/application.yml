@@ -1,0 +1,96 @@
+server:
+  port: 9000
+
+spring:
+  profiles:
+    active: @profiles.active@
+  application:
+    name: ci-pipeline-server
+
+  # Jackson 配置
+  jackson:
+    time-zone: GMT+8
+    date-format: yyyy-MM-dd HH:mm:ss
+    # Argo SDK 的模型是 Swagger 生成的纯 POJO，默认会把大量 null 字段也序列化出来；
+    # 全局去掉 null，使返回体接近 Argo 原生（Go 端 omitempty）的体积
+    default-property-inclusion: non_null
+
+  # 数据源配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/pipeline?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: admin
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+      max-wait: 60000
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+
+  # 允许 Bean 定义覆盖
+  main:
+    allow-bean-definition-overriding: true
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*Mapper.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    # 开发环境可开启SQL日志，生产环境注释掉
+    # log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# Actuator 健康检查
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+# 日志配置
+logging:
+  level:
+    com.ci.pipeline: debug
+    com.baomidou.mybatisplus: debug
+
+# Argo Workflows Server 配置（默认值，各环境可在对应 profile 中覆盖）
+argo:
+  server:
+    url: https://192.168.10.130:2746
+    token: "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6InQ5VUkxY3NSNkU5SWtoQVV1SFlWV3FwbmpJb1ZvLUtYUHFkd3l4RE54WjgifQ.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJhcmdvIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZWNyZXQubmFtZSI6ImFyZ28tc2VydmVyLXRva2VuLWJrcjg1Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZXJ2aWNlLWFjY291bnQubmFtZSI6ImFyZ28tc2VydmVyIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZXJ2aWNlLWFjY291bnQudWlkIjoiMGViZDRlZjQtNjIwMy00ZGFlLThlYjctOTQyNWYxZmYyYWVhIiwic3ViIjoic3lzdGVtOnNlcnZpY2VhY2NvdW50OmFyZ286YXJnby1zZXJ2ZXIifQ.cPmhoMBfrB5mwCWu5eHtnw44DfD1DwG3qJBffL28MHeSevg9YyqtEBxQ0D7W35pHJ8rfKGRP80I3q1TMmxTYbMpExdcFlUUomgiWGb6v_XgkbVqmyWqWZDw2F2AO8pPfbrEmHCuhdtPuXXZy6eNTG-Us3DU2bIaMgSzpXE555B8KuB2iJNKtBpCAw7V5Goq04gt0IcSWTla2cMW6DUvFRuhPp1NwJktuAwlhncq-RfdhKDlQB3xlKjC6MungmZ7qmbEDj2abBsw8kU1wtjNyz1Q8mz18c0A3e-cCdAKTQwSyfBDhxXRVxpGcOEzAxMalwe4pD-mh4k17BD_UPPv9VQ"
+    namespace: argo
+
+# 流水线执行状态同步配置（默认值，各环境可在对应 profile 中覆盖）
+pipeline:
+  run:
+    sync:
+      # 异步轮询 Argo 的间隔（秒）
+      sync-interval-seconds: 5
+      # 兜底同步的陈旧阈值（秒）：update_time 距今超过该值才允许兜底追赶
+      staleness-threshold-seconds: 60
+      # 单条记录异步轮询最大尝试次数（防死循环安全帽）
+      max-sync-attempts: 720
+
+# Kubernetes API Server 配置（默认值，各环境可在对应 profile 中覆盖）
+# token 使用具备 pods/log 等权限的 ServiceAccount Token（不含 "Bearer " 前缀）
+kubernetes:
+  client:
+    master-url: https://192.168.10.130:6443
+    # 注意：此处 token 不含 "Bearer " 前缀，前缀由 KubernetesClientConfig 统一拼接
+    token: "eyJhbGciOiJSUzI1NiIsImtpZCI6InQ5VUkxY3NSNkU5SWtoQVV1SFlWV3FwbmpJb1ZvLUtYUHFkd3l4RE54WjgifQ.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJhcmdvIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZWNyZXQubmFtZSI6ImFyZ28tc2VydmVyLXRva2VuLWJrcjg1Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZXJ2aWNlLWFjY291bnQubmFtZSI6ImFyZ28tc2VydmVyIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZXJ2aWNlLWFjY291bnQudWlkIjoiMGViZDRlZjQtNjIwMy00ZGFlLThlYjctOTQyNWYxZmYyYWVhIiwic3ViIjoic3lzdGVtOnNlcnZpY2VhY2NvdW50OmFyZ286YXJnby1zZXJ2ZXIifQ.cPmhoMBfrB5mwCWu5eHtnw44DfD1DwG3qJBffL28MHeSevg9YyqtEBxQ0D7W35pHJ8rfKGRP80I3q1TMmxTYbMpExdcFlUUomgiWGb6v_XgkbVqmyWqWZDw2F2AO8pPfbrEmHCuhdtPuXXZy6eNTG-Us3DU2bIaMgSzpXE555B8KuB2iJNKtBpCAw7V5Goq04gt0IcSWTla2cMW6DUvFRuhPp1NwJktuAwlhncq-RfdhKDlQB3xlKjC6MungmZ7qmbEDj2abBsw8kU1wtjNyz1Q8mz18c0A3e-cCdAKTQwSyfBDhxXRVxpGcOEzAxMalwe4pD-mh4k17BD_UPPv9VQ"
+    verifying-ssl: false

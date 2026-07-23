@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ci.pipeline.dao.mapper.PipelineRunMapper">
+
+    <resultMap id="BaseResultMap" type="com.ci.pipeline.dao.entity.PipelineRun">
+        <id column="id" property="id"/>
+        <result column="pipeline_id" property="pipelineId"/>
+        <result column="name" property="name"/>
+        <result column="app_name" property="appName"/>
+        <result column="pipeline_template_code" property="pipelineTemplateCode"/>
+        <result column="pipeline_template_version" property="pipelineTemplateVersion"/>
+        <result column="status" property="status"/>
+        <result column="git_branch" property="gitBranch"/>
+        <result column="commit_id" property="commitId"/>
+        <result column="arguments" property="arguments"/>
+        <result column="fail_type" property="failType"/>
+        <result column="fail_message" property="failMessage"/>
+        <result column="duration" property="duration"/>
+        <result column="revision" property="revision"/>
+        <result column="creator" property="creator"/>
+        <result column="start_time" property="startTime"/>
+        <result column="end_time" property="endTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, pipeline_id, name, app_name, pipeline_template_code, pipeline_template_version,
+        status, git_branch, commit_id, arguments, fail_type, fail_message, duration, revision,
+        creator, start_time, end_time, create_time, update_time, deleted
+    </sql>
+
+    <!-- 分页由 MyBatis-Plus 分页插件自动改写，这里无需手写 LIMIT -->
+    <!--
+        排序字段使用 ${} 拼接：sortField 为 Service 层白名单映射后的 snake_case 列名，
+        sortOrder 限定为 asc / desc，均不可由前端直接控制，杜绝 SQL 注入。
+        默认按创建时间倒序。
+    -->
+    <select id="pageQuery" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM pipeline_run
+        <where>
+            deleted = 0
+            <if test="pipelineId != null">
+                AND pipeline_id = #{pipelineId}
+            </if>
+            <if test="appName != null and appName != ''">
+                AND app_name = #{appName}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY
+        <choose>
+            <when test="sortField != null and sortField != ''">
+                ${sortField} ${sortOrder}, create_time DESC, id DESC
+            </when>
+            <otherwise>
+                create_time DESC, id DESC
+            </otherwise>
+        </choose>
+    </select>
+
+    <!--
+        按流水线 id 查询最近一次执行记录：取 id 最大的一条，无记录返回 null。
+    -->
+    <select id="selectLatestByPipelineId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM pipeline_run
+        WHERE deleted = 0
+          AND pipeline_id = #{pipelineId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <!--
+        带乐观锁的回写（phase 变更或 generation 变更都会触发）：
+        - WHERE 同时校验 id / revision / deleted，仅命中一条时 revision 自增；
+        - status / fail_type / fail_message / duration / start_time / end_time 均为「非 null 才写」，避免覆盖未变更字段；
+          generation 变化时这些字段均为 null，等价于「仅自增 revision」（update_time 由 ON UPDATE 自动刷新）；
+        - 无论哪种变更，revision = revision + 1 必写（乐观锁版本递增）。
+        用 <set> 自动处理条件字段的逗号。
+    -->
+    <update id="updateForSync">
+        UPDATE pipeline_run
+        <set>
+            <if test="run.status != null">status = #{run.status},</if>
+            <if test="run.failType != null">fail_type = #{run.failType},</if>
+            <if test="run.failMessage != null">fail_message = #{run.failMessage},</if>
+            <if test="run.duration != null">duration = #{run.duration},</if>
+            <if test="run.startTime != null">start_time = #{run.startTime},</if>
+            <if test="run.endTime != null">end_time = #{run.endTime},</if>
+            revision = revision + 1,
+        </set>
+        WHERE deleted = 0
+          AND id = #{run.id}
+          AND revision = #{run.revision}
+    </update>
+
+    <!--
+        重试前状态重置：状态置回 Pending，并清空 fail_type / fail_message / duration / start_time / end_time，
+        带乐观锁（revision）。
+    -->
+    <update id="resetForRetry">
+        UPDATE pipeline_run
+        SET status = 'Pending',
+            fail_type = NULL,
+            fail_message = NULL,
+            duration = NULL,
+            start_time = NULL,
+            end_time = NULL,
+            revision = revision + 1
+        WHERE deleted = 0
+          AND id = #{id}
+          AND revision = #{revision}
+    </update>
+
+</mapper>

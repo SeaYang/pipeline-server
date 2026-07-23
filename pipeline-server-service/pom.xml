@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>com.ci.pipeline</groupId>
+        <artifactId>ci-pipeline-server</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>pipeline-server-service</artifactId>
+    <description>业务层 - 核心业务逻辑、Controller、启动类</description>
+
+    <dependencies>
+        <!-- common 模块 -->
+        <dependency>
+            <groupId>com.ci.pipeline</groupId>
+            <artifactId>pipeline-server-common</artifactId>
+        </dependency>
+
+        <!-- dao 模块 -->
+        <dependency>
+            <groupId>com.ci.pipeline</groupId>
+            <artifactId>pipeline-server-dao</artifactId>
+        </dependency>
+
+        <!-- facade 模块 -->
+        <dependency>
+            <groupId>com.ci.pipeline</groupId>
+            <artifactId>pipeline-server-facade</artifactId>
+        </dependency>
+
+        <!-- Spring Boot Starter Web -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Spring Boot Actuator (健康检查) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Spring Cloud OpenFeign -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+
+        <!-- Argo Workflows Java Client -->
+        <dependency>
+            <groupId>io.argoproj.workflow</groupId>
+            <artifactId>argo-client-java</artifactId>
+            <version>v3.4.8</version>
+        </dependency>
+
+        <!-- Kubernetes Java Client
+             说明：argo-client-java v3.4.8 传递依赖 io.kubernetes:client-java:14.0.1，
+             其生成的模型类（如 IoArgoprojWorkflowV1alpha1Workflow 引用的 V1ObjectMeta）
+             是针对 14.0.1 的 kubernetes-models 编译的，因此这里必须显式锁定 14.0.1，
+             切勿随意升级到 17.x（即便 17.x 才是 K8s 1.23 的官方对应版本），
+             否则会导致 argo 模型运行期 NoSuchMethodError。
+             client-java 对 K8s API 跨版本兼容性良好，14.0.1 调用 1.23.x 集群（读取 Pod 日志等）可用。 -->
+        <dependency>
+            <groupId>io.kubernetes</groupId>
+            <artifactId>client-java</artifactId>
+            <version>14.0.1</version>
+        </dependency>
+
+        <!-- Spring Boot Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.ci.pipeline.service.bootstrap.Application</mainClass>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

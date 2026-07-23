@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ci.pipeline.dao.mapper.PipelineParameterMapper">
+
+    <resultMap id="BaseResultMap" type="com.ci.pipeline.dao.entity.PipelineParameter">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="label" property="label"/>
+        <result column="description" property="description"/>
+        <result column="component_type" property="componentType"/>
+        <result column="param_type" property="paramType"/>
+        <result column="required" property="required"/>
+        <result column="default_value" property="defaultValue"/>
+        <result column="need_system_process" property="needSystemProcess"/>
+        <result column="regex_pattern" property="regexPattern"/>
+        <result column="depend_params" property="dependParams"/>
+        <result column="refresh_on_changed" property="refreshOnChanged"/>
+        <result column="param_group" property="paramGroup"/>
+        <result column="param_group_sort" property="paramGroupSort"/>
+        <result column="option_config" property="optionConfig"/>
+        <result column="default_value_strategy_config" property="defaultValueStrategyConfig"/>
+        <result column="creator" property="creator"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, name, label, description, component_type, param_type, required, default_value,
+        need_system_process, regex_pattern, depend_params, refresh_on_changed, param_group,
+        param_group_sort, option_config, default_value_strategy_config, creator,
+        create_time, update_time, deleted
+    </sql>
+
+    <select id="selectByName" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM pipeline_parameter
+        WHERE deleted = 0
+          AND name = #{name}
+        LIMIT 1
+    </select>
+
+    <select id="countByName" resultType="long">
+        SELECT COUNT(*)
+        FROM pipeline_parameter
+        WHERE deleted = 0
+          AND name = #{name}
+        <if test="excludeId != null">
+            AND id &lt;&gt; #{excludeId}
+        </if>
+    </select>
+
+    <select id="pageQuery" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM pipeline_parameter
+        <where>
+            deleted = 0
+            <if test="name != null and name != ''">
+                AND name LIKE CONCAT('%', #{name}, '%')
+            </if>
+            <if test="label != null and label != ''">
+                AND label LIKE CONCAT('%', #{label}, '%')
+            </if>
+            <if test="paramType != null and paramType != ''">
+                AND param_type = #{paramType}
+            </if>
+            <if test="paramGroup != null and paramGroup != ''">
+                AND param_group = #{paramGroup}
+            </if>
+        </where>
+        ORDER BY
+        <choose>
+            <when test="sortField != null and sortField != ''">
+                ${sortField} ${sortOrder}, id DESC
+            </when>
+            <otherwise>
+                id DESC
+            </otherwise>
+        </choose>
+    </select>
+</mapper>

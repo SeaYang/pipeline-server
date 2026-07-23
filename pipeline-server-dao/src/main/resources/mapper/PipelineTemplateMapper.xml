@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ci.pipeline.dao.mapper.PipelineTemplateMapper">
+
+    <resultMap id="BaseResultMap" type="com.ci.pipeline.dao.entity.PipelineTemplate">
+        <id column="id" property="id"/>
+        <result column="pipeline_template_code" property="pipelineTemplateCode"/>
+        <result column="name" property="name"/>
+        <result column="description" property="description"/>
+        <result column="pipeline_template_group" property="pipelineTemplateGroup"/>
+        <result column="creator" property="creator"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, pipeline_template_code, name, description, pipeline_template_group, creator, create_time, update_time, deleted
+    </sql>
+
+    <!-- 自定义查询不会被 MyBatis-Plus 逻辑删除插件自动追加 deleted 条件，需手动指定 deleted = 0 -->
+    <select id="selectByPipelineTemplateCode" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM pipeline_template
+        WHERE deleted = 0
+          AND pipeline_template_code = #{pipelineTemplateCode}
+        LIMIT 1
+    </select>
+
+    <select id="countByPipelineTemplateCode" resultType="long">
+        SELECT COUNT(*)
+        FROM pipeline_template
+        WHERE deleted = 0
+          AND pipeline_template_code = #{pipelineTemplateCode}
+        <if test="excludeId != null">
+            AND id &lt;&gt; #{excludeId}
+        </if>
+    </select>
+
+    <!--
+        排序字段使用 ${} 拼接：sortField 为 Service 层白名单映射后的 snake_case 列名，
+        sortOrder 限定为 asc / desc，均不可由前端直接控制，杜绝 SQL 注入。
+    -->
+    <select id="listQuery" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM pipeline_template
+        <where>
+            deleted = 0
+            <if test="pipelineTemplateGroup != null and pipelineTemplateGroup != ''">
+                AND pipeline_template_group = #{pipelineTemplateGroup}
+            </if>
+        </where>
+        ORDER BY
+        <choose>
+            <when test="sortField != null and sortField != ''">
+                ${sortField} ${sortOrder}, id DESC
+            </when>
+            <otherwise>
+                id DESC
+            </otherwise>
+        </choose>
+    </select>
+
+</mapper>
