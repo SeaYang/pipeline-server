@@ -1,0 +1,54 @@
+package com.ci.pipeline.service.strategy.pipeline.parameter.impl;
+
+import com.ci.pipeline.dao.entity.PipelineParameter;
+import com.ci.pipeline.service.strategy.defaultvalue.DefaultValueStrategyManager;
+import com.ci.pipeline.service.strategy.pipeline.parameter.PipelineParameterStrategy;
+import com.ci.pipeline.service.strategy.ParamResolveContext;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+/**
+ * 流水线参数策略默认实现（基类）。
+ * <p>所有按参数名注册的具体策略类都应继承本类，按需重写 {@link #buildParameter}，
+ * 通过 {@code super.buildParameter()} 复用基类的策略链逻辑后做后置增强。
+ *
+ * <h3>基类策略链</h3>
+ * <p>不区分参数类型（system / user），统一走默认值策略链：
+ * <ol>
+ *     <li>{@link DefaultValueStrategyManager#resolve} 按 priority 降序遍历策略链，取第一个非 null；</li>
+ *     <li>全 null 用 {@code param.getDefaultValue()} 兜底。</li>
+ * </ol>
+ * <p>系统参数（如 app-name、git-url 等）有自己的策略类，重写 {@link #buildParameter} 直接返回上下文值，
+ * 不会走到基类的策略链。
+ *
+ * <h3>扩展方式</h3>
+ * <pre>{@code
+ * @Component("git-branch")
+ * public class GitBranchStrategy extends DefaultPipelineParameterStrategy {
+ *     @Override
+ *     public String buildParameter(PipelineParameter param, ParamResolveContext context) {
+ *         // 1. 先走基类策略链获取基础值
+ *         String value = super.buildParameter(param, context);
+ *         // 2. 后置增强：从 GitLab 获取分支列表填充选项等
+ *         // ...
+ *         return value;
+ *     }
+ * }
+ * }</pre>
+ */
+@Slf4j
+@Component("DefaultPipelineParameterStrategy")
+public class DefaultPipelineParameterStrategy implements PipelineParameterStrategy {
+
+    @Autowired
+    protected DefaultValueStrategyManager defaultValueStrategyManager;
+
+    @Override
+    public String buildParameter(PipelineParameter param, ParamResolveContext context) {
+        // 走默认值策略链（DefaultValueStrategyManager），全 null 用 defaultValue 兜底
+        String strategyValue = defaultValueStrategyManager.resolve(
+                param.getName(), param.getDefaultValueStrategyConfig(), context);
+        return strategyValue != null ? strategyValue : param.getDefaultValue();
+    }
+}

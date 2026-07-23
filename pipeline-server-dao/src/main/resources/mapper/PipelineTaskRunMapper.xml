@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ci.pipeline.dao.mapper.PipelineTaskRunMapper">
+
+    <resultMap id="BaseResultMap" type="com.ci.pipeline.dao.entity.PipelineTaskRun">
+        <id column="id" property="id"/>
+        <result column="pipeline_run_id" property="pipelineRunId"/>
+        <result column="task_code" property="taskCode"/>
+        <result column="status" property="status"/>
+        <result column="inputs" property="inputs"/>
+        <result column="outputs" property="outputs"/>
+        <result column="pod_name" property="podName"/>
+        <result column="log_content" property="logContent"/>
+        <result column="start_time" property="startTime"/>
+        <result column="end_time" property="endTime"/>
+        <result column="duration" property="duration"/>
+        <result column="run_host_name" property="runHostName"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, pipeline_run_id, task_code, status, inputs, outputs, pod_name,
+        log_content, start_time, end_time, duration, run_host_name, create_time, update_time, deleted
+    </sql>
+
+    <!-- 终态落地采用「先删后插」，delete 走物理删除（不走逻辑删除），保证幂等 -->
+    <delete id="deleteByPipelineRunId">
+        DELETE FROM pipeline_task_run
+        WHERE pipeline_run_id = #{pipelineRunId}
+    </delete>
+
+    <insert id="batchInsert">
+        INSERT INTO pipeline_task_run
+            (pipeline_run_id, task_code, status, inputs, outputs, pod_name,
+             log_content, start_time, end_time, duration, run_host_name)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.pipelineRunId}, #{item.taskCode}, #{item.status},
+             #{item.inputs}, #{item.outputs}, #{item.podName}, #{item.logContent},
+             #{item.startTime}, #{item.endTime}, #{item.duration}, #{item.runHostName})
+        </foreach>
+    </insert>
+
+</mapper>

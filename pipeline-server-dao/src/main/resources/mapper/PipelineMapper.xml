@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ci.pipeline.dao.mapper.PipelineMapper">
+
+    <resultMap id="BaseResultMap" type="com.ci.pipeline.dao.entity.Pipeline">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="app_name" property="appName"/>
+        <result column="pipeline_template_code" property="pipelineTemplateCode"/>
+        <result column="creator" property="creator"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, name, app_name, pipeline_template_code, creator, create_time, update_time, deleted
+    </sql>
+
+    <!-- 分页由 MyBatis-Plus 分页插件自动改写，这里无需手写 LIMIT -->
+    <!--
+        排序字段使用 ${} 拼接：sortField 为 Service 层白名单映射后的 snake_case 列名，
+        sortOrder 限定为 asc / desc，均不可由前端直接控制，杜绝 SQL 注入。
+        默认按创建时间倒序（需求：默认按创建时间倒序）。
+    -->
+    <select id="pageQuery" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM pipeline
+        <where>
+            deleted = 0
+            <if test="appName != null and appName != ''">
+                AND app_name = #{appName}
+            </if>
+        </where>
+        ORDER BY
+        <choose>
+            <when test="sortField != null and sortField != ''">
+                ${sortField} ${sortOrder}, create_time DESC, id DESC
+            </when>
+            <otherwise>
+                create_time DESC, id DESC
+            </otherwise>
+        </choose>
+    </select>
+
+</mapper>

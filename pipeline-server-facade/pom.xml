@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>com.ci.pipeline</groupId>
+        <artifactId>ci-pipeline-server</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>pipeline-server-facade</artifactId>
+    <description>对外接口层 - API 定义、DTO、Feign 客户端接口</description>
+
+    <dependencies>
+        <!-- common 模块 -->
+        <dependency>
+            <groupId>com.ci.pipeline</groupId>
+            <artifactId>pipeline-server-common</artifactId>
+        </dependency>
+
+        <!-- spring-web -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.argoproj.workflow</groupId>
+            <artifactId>argo-client-java</artifactId>
+            <version>v3.4.8</version>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- jackson-databind（PipelineRunDetailDTO 使用 JsonNode） -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>

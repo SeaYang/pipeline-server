@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ci.pipeline.dao.mapper.TaskTemplateVersionMapper">
+
+    <resultMap id="BaseResultMap" type="com.ci.pipeline.dao.entity.TaskTemplateVersion">
+        <id column="id" property="id"/>
+        <result column="task_template_code" property="taskTemplateCode"/>
+        <result column="version" property="version"/>
+        <result column="status" property="status"/>
+        <result column="template_detail" property="templateDetail"/>
+        <result column="change_note" property="changeNote"/>
+        <result column="creator" property="creator"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, task_template_code, version, status, template_detail, change_note, creator, create_time, update_time, deleted
+    </sql>
+
+    <!-- 自定义查询不会被 MyBatis-Plus 逻辑删除插件自动追加 deleted 条件，需手动指定 deleted = 0 -->
+    <select id="selectByCodeAndVersion" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM task_template_version
+        WHERE deleted = 0
+          AND task_template_code = #{taskTemplateCode}
+          AND version = #{version}
+        LIMIT 1
+    </select>
+
+    <select id="countByCode" resultType="long">
+        SELECT COUNT(*)
+        FROM task_template_version
+        WHERE deleted = 0
+          AND task_template_code = #{taskTemplateCode}
+    </select>
+
+    <!-- 仅取 version 列，避免拉取 longtext 的 template_detail，用于递增校验求最大值 -->
+    <select id="listVersionsByCode" resultType="java.lang.String">
+        SELECT version
+        FROM task_template_version
+        WHERE deleted = 0
+          AND task_template_code = #{taskTemplateCode}
+    </select>
+
+    <!-- 版本列表：SQL 不排序，由调用方在内存中按创建时间倒序 -->
+    <select id="listByCode" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM task_template_version
+        WHERE deleted = 0
+          AND task_template_code = #{taskTemplateCode}
+    </select>
+
+    <update id="updateStatusByCodeAndVersion">
+        UPDATE task_template_version
+        SET status = #{status}
+        WHERE deleted = 0
+          AND task_template_code = #{taskTemplateCode}
+          AND version = #{version}
+    </update>
+
+    <update id="updateOtherStatusToExpired">
+        UPDATE task_template_version
+        SET status = 'EXPIRED'
+        WHERE deleted = 0
+          AND task_template_code = #{taskTemplateCode}
+          AND version &lt;&gt; #{excludeVersion}
+          AND status &lt;&gt; 'EXPIRED'
+    </update>
+
+</mapper>
