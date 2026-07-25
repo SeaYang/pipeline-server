@@ -236,19 +236,28 @@ public class PipelineRunServiceImpl implements PipelineRunService {
         if (dbStatus == PipelineRunStatusEnum.SUCCEEDED || dbStatus == PipelineRunStatusEnum.CANCELLED) {
             throw new BusinessException(PipelineConstants.MSG_RUN_STOP_ALREADY_TERMINAL);
         }
-        // 2) 实时查询 Argo，若已 Succeeded 则不可停止
+        // 2) 实时查询 Argo phase，若已 Succeeded 则不可停止（成功的不允许取消）
         String argoPhase = getArgoPhase(run.getName());
         if (PipelineRunStatusEnum.SUCCEEDED.getCode().equals(argoPhase)) {
             throw new BusinessException(String.format(PipelineConstants.MSG_RUN_ARGO_STOP_NOT_RUNNING, argoPhase));
         }
-        // 3) 调 Argo 终止（terminate）
-        try {
-            argoWorkflowAgent.terminateWorkflow(argoServerProperties.getNamespace(), run.getName());
-        } catch (RuntimeException e) {
-            log.error("停止流水线失败, pipelineRunId={}, name={}", id, run.getName(), e);
-            throw new BusinessException(String.format(PipelineConstants.MSG_RUN_STOP_FAILED, e.getMessage()));
+        // 3) Argo 未终态（Pending / Running / Unknown）：调 Argo terminate 终止 Pod
+        //    Argo 已终态（Failed / Error）：workflow 已 completed，terminate API 会报
+        //    "cannot shutdown a completed workflow"，跳过即可——Cancelled 是平台扩展态，
+        //    只要 Argo 不是 Succeeded，平台侧都有权将 DB 状态改为 Cancelled。
+        PipelineRunStatusEnum argoStatus = PipelineRunStatusEnum.ofCode(argoPhase);
+        if (argoStatus == null || !argoStatus.isArgoStable()) {
+            try {
+                argoWorkflowAgent.terminateWorkflow(argoServerProperties.getNamespace(), run.getName());
+            } catch (RuntimeException e) {
+                log.error("停止流水线失败, pipelineRunId={}, name={}", id, run.getName(), e);
+                throw new BusinessException(String.format(PipelineConstants.MSG_RUN_STOP_FAILED, e.getMessage()));
+            }
+        } else {
+            log.info("Argo Workflow 已终态({}), 跳过 terminate 直接置 Cancelled, pipelineRunId={}, name={}",
+                    argoPhase, id, run.getName());
         }
-        // 4) 平台直接置 Cancelled（argo terminate 后会报 Failed/Error，由平台覆盖语义为已取消）
+        // 4) 平台直接置 Cancelled（Cancelled 是平台扩展态，覆盖 Argo 的 Failed/Error 语义为用户主动取消）
         PipelineRun update = new PipelineRun();
         update.setId(run.getId());
         update.setRevision(run.getRevision());
