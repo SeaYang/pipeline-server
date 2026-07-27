@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ci.pipeline.dao.mapper.GenericConfigHistoryMapper">
+
+    <resultMap id="BaseResultMap" type="com.ci.pipeline.dao.entity.GenericConfigHistory">
+        <id column="id" property="id"/>
+        <result column="config_id" property="configId"/>
+        <result column="config_key" property="configKey"/>
+        <result column="action" property="action"/>
+        <result column="old_value" property="oldValue"/>
+        <result column="new_value" property="newValue"/>
+        <result column="old_value_format" property="oldValueFormat"/>
+        <result column="new_value_format" property="newValueFormat"/>
+        <result column="change_summary" property="changeSummary"/>
+        <result column="operator" property="operator"/>
+        <result column="operate_time" property="operateTime"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, config_id, config_key, action, old_value, new_value,
+        old_value_format, new_value_format, change_summary, operator, operate_time
+    </sql>
+
+    <select id="listByConfigId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM generic_config_history
+        WHERE config_id = #{configId}
+        ORDER BY operate_time DESC, id DESC
+    </select>
+
+    <select id="pageQuery" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM generic_config_history
+        <where>
+            <if test="configKey != null and configKey != ''">
+                AND config_key LIKE CONCAT('%', #{configKey}, '%')
+            </if>
+            <if test="action != null and action != ''">
+                AND action = #{action}
+            </if>
+            <if test="operator != null and operator != ''">
+                AND operator LIKE CONCAT('%', #{operator}, '%')
+            </if>
+        </where>
+        ORDER BY operate_time DESC, id DESC
+    </select>
+
+</mapper>
