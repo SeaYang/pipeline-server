@@ -8,13 +8,14 @@
         <result column="programming_language" property="programmingLanguage"/>
         <result column="description" property="description"/>
         <result column="git_ssh_url" property="gitSshUrl"/>
+        <result column="repo_id" property="repoId"/>
         <result column="create_time" property="createTime"/>
         <result column="update_time" property="updateTime"/>
         <result column="deleted" property="deleted"/>
     </resultMap>
 
     <sql id="Base_Column_List">
-        id, app_name, programming_language, description, git_ssh_url, create_time, update_time, deleted
+        id, app_name, programming_language, description, git_ssh_url, repo_id, create_time, update_time, deleted
     </sql>
 
     <!-- 自定义查询不会被 MyBatis-Plus 逻辑删除插件自动追加 deleted 条件，需手动指定 deleted = 0 -->

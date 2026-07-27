@@ -178,11 +178,8 @@ public class GenericConfigServiceImpl implements GenericConfigService {
             throw new BusinessException(GenericConfigConstants.MSG_NOT_FOUND);
         }
 
-        // 逻辑删除
-        GenericConfig update = new GenericConfig();
-        update.setId(existing.getId());
-        update.setDeleted(1);
-        genericConfigRepository.updateById(update);
+        // 逻辑删除（MyBatis-Plus 自动转为 UPDATE SET deleted=1）
+        genericConfigRepository.deleteById(existing.getId());
         log.info("删除配置成功, key={}, id={}", existing.getConfigKey(), id);
 
         // 记录变更历史

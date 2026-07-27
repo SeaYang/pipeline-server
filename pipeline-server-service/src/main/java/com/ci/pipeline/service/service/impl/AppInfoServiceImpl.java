@@ -3,6 +3,7 @@ package com.ci.pipeline.service.service.impl;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.ci.pipeline.common.constants.AppInfoConstants;
 import com.ci.pipeline.common.constants.CommonConstants;
+import com.ci.pipeline.common.constants.GitLabConstants;
 import com.ci.pipeline.common.exception.BusinessException;
 import com.ci.pipeline.common.util.SortUtil;
 import com.ci.pipeline.dao.entity.AppInfo;
@@ -13,6 +14,7 @@ import com.ci.pipeline.facade.request.AppInfoUpdateRequest;
 import com.ci.pipeline.facade.response.AppInfoResponse;
 import com.ci.pipeline.facade.response.PageResponse;
 import com.ci.pipeline.service.service.AppInfoService;
+import com.ci.pipeline.service.service.GitLabService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +45,7 @@ public class AppInfoServiceImpl implements AppInfoService {
         m.put("programmingLanguage", "programming_language");
         m.put("description", "description");
         m.put("gitSshUrl", "git_ssh_url");
+        m.put("repoId", "repo_id");
         m.put("createTime", "create_time");
         m.put("updateTime", "update_time");
         SORT_FIELD_MAP = Collections.unmodifiableMap(m);
@@ -50,6 +53,9 @@ public class AppInfoServiceImpl implements AppInfoService {
 
     @Autowired
     private AppInfoRepository appInfoRepository;
+
+    @Autowired
+    private GitLabService gitLabService;
 
     @Override
     public AppInfoResponse create(AppInfoCreateRequest request) {
@@ -59,10 +65,15 @@ public class AppInfoServiceImpl implements AppInfoService {
             throw new BusinessException(String.format(
                     AppInfoConstants.MSG_APP_NAME_DUPLICATED, request.getAppName()));
         }
+        // 校验 gitSshUrl 的 SSH 格式，并查询 GitLab repoId
+        validateGitSshUrl(request.getGitSshUrl());
+        Long repoId = gitLabService.getRepoId(request.getGitSshUrl());
+
         AppInfo entity = new AppInfo();
         BeanUtils.copyProperties(request, entity);
+        entity.setRepoId(repoId);
         appInfoRepository.insert(entity);
-        log.info("新增应用成功, appName={}, id={}", entity.getAppName(), entity.getId());
+        log.info("新增应用成功, appName={}, id={}, repoId={}", entity.getAppName(), entity.getId(), repoId);
         return toResponse(appInfoRepository.selectById(entity.getId()));
     }
 
@@ -87,6 +98,13 @@ public class AppInfoServiceImpl implements AppInfoService {
         }
         AppInfo entity = new AppInfo();
         BeanUtils.copyProperties(request, entity);
+        // 如果传了 gitSshUrl，校验 SSH 格式并重新查询 repoId
+        if (StringUtils.hasText(request.getGitSshUrl())) {
+            validateGitSshUrl(request.getGitSshUrl());
+            Long repoId = gitLabService.getRepoId(request.getGitSshUrl());
+            entity.setRepoId(repoId);
+            log.info("修改应用 gitSshUrl, id={}, repoId={}", request.getId(), repoId);
+        }
         appInfoRepository.updateById(entity);
         log.info("修改应用成功, id={}", request.getId());
         return toResponse(appInfoRepository.selectById(request.getId()));
@@ -138,6 +156,16 @@ public class AppInfoServiceImpl implements AppInfoService {
         }
         if (!StringUtils.hasText(request.getGitSshUrl())) {
             throw new BusinessException(AppInfoConstants.MSG_GIT_SSH_URL_REQUIRED);
+        }
+    }
+
+    /**
+     * 校验 gitSshUrl 是否为合法的 SSH 格式。
+     */
+    private void validateGitSshUrl(String gitSshUrl) {
+        if (!StringUtils.hasText(gitSshUrl)
+                || !gitSshUrl.trim().matches(GitLabConstants.GIT_SSH_URL_REGEX)) {
+            throw new BusinessException(GitLabConstants.MSG_INVALID_GIT_SSH_URL);
         }
     }
 

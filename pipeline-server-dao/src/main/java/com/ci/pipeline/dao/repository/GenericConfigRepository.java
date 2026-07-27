@@ -32,4 +32,12 @@ public class GenericConfigRepository {
     public int updateById(GenericConfig entity) {
         return genericConfigMapper.updateById(entity);
     }
+
+    /**
+     * 逻辑删除（MyBatis-Plus 全局配置了 logic-delete-field=deleted，
+     * deleteById 会自动转为 UPDATE SET deleted=1 WHERE id=? AND deleted=0）。
+     */
+    public int deleteById(Long id) {
+        return genericConfigMapper.deleteById(id);
+    }
 }

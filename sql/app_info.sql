@@ -18,6 +18,7 @@ CREATE TABLE `app_info` (
   `programming_language` varchar(50) NOT NULL COMMENT '所使用的编程语言或平台',
   `description` varchar(500) DEFAULT NULL COMMENT '应用描述，比如是干嘛的，什么领域',
   `git_ssh_url` varchar(500) NOT NULL COMMENT 'git仓库地址，ssh格式',
+  `repo_id` bigint DEFAULT NULL COMMENT 'GitLab仓库ID',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` tinyint(1) NOT NULL DEFAULT '0',

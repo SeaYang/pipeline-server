@@ -44,6 +44,11 @@ public class AppInfo implements Serializable {
     private String gitSshUrl;
 
     /**
+     * GitLab 仓库 ID
+     */
+    private Long repoId;
+
+    /**
      * 创建时间
      */
     private Date createTime;
