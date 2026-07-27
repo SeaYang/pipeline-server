@@ -56,6 +56,13 @@
             <version>v3.4.8</version>
         </dependency>
 
+        <!-- GitLab4J API - GitLab REST API Java SDK -->
+        <dependency>
+            <groupId>org.gitlab4j</groupId>
+            <artifactId>gitlab4j-api</artifactId>
+            <version>5.8.0</version>
+        </dependency>
+
         <!-- Kubernetes Java Client
              说明：argo-client-java v3.4.8 传递依赖 io.kubernetes:client-java:14.0.1，
              其生成的模型类（如 IoArgoprojWorkflowV1alpha1Workflow 引用的 V1ObjectMeta）
