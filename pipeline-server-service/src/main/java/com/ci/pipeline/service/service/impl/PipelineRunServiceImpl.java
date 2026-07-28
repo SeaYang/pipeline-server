@@ -3,6 +3,7 @@ package com.ci.pipeline.service.service.impl;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.ci.pipeline.common.auth.UserContext;
 import com.ci.pipeline.common.constants.CommonConstants;
+import com.ci.pipeline.common.constants.DistributedLockConstants;
 import com.ci.pipeline.common.constants.PipelineConstants;
 import com.ci.pipeline.common.enums.PipelineRunStatusEnum;
 import com.ci.pipeline.common.exception.BusinessException;
@@ -24,6 +25,7 @@ import com.ci.pipeline.facade.response.PipelineRunSnapshotResponse;
 import com.ci.pipeline.service.config.ArgoServerProperties;
 import com.ci.pipeline.service.config.PipelineRunSyncProperties;
 import com.ci.pipeline.service.remote.ArgoWorkflowAgent;
+import com.ci.pipeline.service.service.DistributedLockService;
 import com.ci.pipeline.service.service.PipelineRunService;
 import com.ci.pipeline.service.service.PipelineRunSyncService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -96,6 +98,9 @@ public class PipelineRunServiceImpl implements PipelineRunService {
 
     @Autowired
     private PipelineRunSyncProperties pipelineRunSyncProperties;
+
+    @Autowired
+    private DistributedLockService distributedLockService;
 
     /**
      * 流水线执行状态异步同步线程池
@@ -180,9 +185,20 @@ public class PipelineRunServiceImpl implements PipelineRunService {
             return toResponse(run);
         }
         // 3) 超过阈值，认为原异步同步已失效（实例下线/发布），重新提交异步同步任务，直到终态
-        log.info("触发兜底状态同步（异步轮询直到终态）, pipelineRunId={}, lastUpdateTime={}", id, run.getUpdateTime());
-        pipelineRunSyncExecutor.execute(() -> pipelineRunSyncService.syncUntilTerminal(id));
-        return toResponse(run);
+        // 非阻塞加锁，防止并发或连击重复提交同步任务
+        String lockKey = DistributedLockConstants.LOCK_KEY_PIPELINE_RUN + id;
+        String lockValue = distributedLockService.tryLock(
+                lockKey, DistributedLockConstants.DEFAULT_LOCK_EXPIRE_SECONDS, "同步流水线运行状态");
+        if (lockValue == null) {
+            throw new BusinessException(PipelineConstants.MSG_OPERATION_LOCK_FAILED);
+        }
+        try {
+            log.info("触发兜底状态同步（异步轮询直到终态）, pipelineRunId={}, lastUpdateTime={}", id, run.getUpdateTime());
+            pipelineRunSyncExecutor.execute(() -> pipelineRunSyncService.syncUntilTerminal(id));
+            return toResponse(run);
+        } finally {
+            distributedLockService.unlock(lockKey, lockValue);
+        }
     }
 
     @Override
@@ -205,21 +221,32 @@ public class PipelineRunServiceImpl implements PipelineRunService {
         if (argoStatus == null || !argoStatus.isFailure()) {
             throw new BusinessException(String.format(PipelineConstants.MSG_RUN_ARGO_RETRY_NOT_FAILED, argoPhase));
         }
-        // 3) 调 Argo 重试
+        // 非阻塞加锁，防止并发或连击重复重试
+        String lockKey = DistributedLockConstants.LOCK_KEY_PIPELINE_RUN + id;
+        String lockValue = distributedLockService.tryLock(
+                lockKey, DistributedLockConstants.DEFAULT_LOCK_EXPIRE_SECONDS, "重试流水线运行");
+        if (lockValue == null) {
+            throw new BusinessException(PipelineConstants.MSG_OPERATION_LOCK_FAILED);
+        }
         try {
-            argoWorkflowAgent.retryWorkflow(argoServerProperties.getNamespace(), run.getName());
-        } catch (RuntimeException e) {
-            log.error("重试流水线失败, pipelineRunId={}, name={}", id, run.getName(), e);
-            throw new BusinessException(String.format(PipelineConstants.MSG_RUN_RETRY_FAILED, e.getMessage()));
+            // 3) 调 Argo 重试
+            try {
+                argoWorkflowAgent.retryWorkflow(argoServerProperties.getNamespace(), run.getName());
+            } catch (RuntimeException e) {
+                log.error("重试流水线失败, pipelineRunId={}, name={}", id, run.getName(), e);
+                throw new BusinessException(String.format(PipelineConstants.MSG_RUN_RETRY_FAILED, e.getMessage()));
+            }
+            // 4) 状态重置为 Pending（清失败信息），乐观锁
+            if (pipelineRunRepository.resetForRetry(run.getId(), run.getRevision()) != 1) {
+                throw new BusinessException(PipelineConstants.MSG_RUN_STATE_CHANGED);
+            }
+            log.info("流水线已重试, pipelineRunId={}, name={}", id, run.getName());
+            // 5) 进入异步同步状态逻辑（Pending → Running → 终态）
+            pipelineRunSyncExecutor.execute(() -> pipelineRunSyncService.syncUntilTerminal(id));
+            return toResponse(pipelineRunRepository.selectById(id));
+        } finally {
+            distributedLockService.unlock(lockKey, lockValue);
         }
-        // 4) 状态重置为 Pending（清失败信息），乐观锁
-        if (pipelineRunRepository.resetForRetry(run.getId(), run.getRevision()) != 1) {
-            throw new BusinessException(PipelineConstants.MSG_RUN_STATE_CHANGED);
-        }
-        log.info("流水线已重试, pipelineRunId={}, name={}", id, run.getName());
-        // 5) 进入异步同步状态逻辑（Pending → Running → 终态）
-        pipelineRunSyncExecutor.execute(() -> pipelineRunSyncService.syncUntilTerminal(id));
-        return toResponse(pipelineRunRepository.selectById(id));
     }
 
     @Override
@@ -241,36 +268,47 @@ public class PipelineRunServiceImpl implements PipelineRunService {
         if (PipelineRunStatusEnum.SUCCEEDED.getCode().equals(argoPhase)) {
             throw new BusinessException(String.format(PipelineConstants.MSG_RUN_ARGO_STOP_NOT_RUNNING, argoPhase));
         }
-        // 3) Argo 未终态（Pending / Running / Unknown）：调 Argo terminate 终止 Pod
-        //    Argo 已终态（Failed / Error）：workflow 已 completed，terminate API 会报
-        //    "cannot shutdown a completed workflow"，跳过即可——Cancelled 是平台扩展态，
-        //    只要 Argo 不是 Succeeded，平台侧都有权将 DB 状态改为 Cancelled。
-        PipelineRunStatusEnum argoStatus = PipelineRunStatusEnum.ofCode(argoPhase);
-        if (argoStatus == null || !argoStatus.isArgoStable()) {
-            try {
-                argoWorkflowAgent.terminateWorkflow(argoServerProperties.getNamespace(), run.getName());
-            } catch (RuntimeException e) {
-                log.error("停止流水线失败, pipelineRunId={}, name={}", id, run.getName(), e);
-                throw new BusinessException(String.format(PipelineConstants.MSG_RUN_STOP_FAILED, e.getMessage()));
+        // 非阻塞加锁，防止并发或连击重复停止
+        String lockKey = DistributedLockConstants.LOCK_KEY_PIPELINE_RUN + id;
+        String lockValue = distributedLockService.tryLock(
+                lockKey, DistributedLockConstants.DEFAULT_LOCK_EXPIRE_SECONDS, "停止流水线运行");
+        if (lockValue == null) {
+            throw new BusinessException(PipelineConstants.MSG_OPERATION_LOCK_FAILED);
+        }
+        try {
+            // 3) Argo 未终态（Pending / Running / Unknown）：调 Argo terminate 终止 Pod
+            //    Argo 已终态（Failed / Error）：workflow 已 completed，terminate API 会报
+            //    "cannot shutdown a completed workflow"，跳过即可——Cancelled 是平台扩展态，
+            //    只要 Argo 不是 Succeeded，平台侧都有权将 DB 状态改为 Cancelled。
+            PipelineRunStatusEnum argoStatus = PipelineRunStatusEnum.ofCode(argoPhase);
+            if (argoStatus == null || !argoStatus.isArgoStable()) {
+                try {
+                    argoWorkflowAgent.terminateWorkflow(argoServerProperties.getNamespace(), run.getName());
+                } catch (RuntimeException e) {
+                    log.error("停止流水线失败, pipelineRunId={}, name={}", id, run.getName(), e);
+                    throw new BusinessException(String.format(PipelineConstants.MSG_RUN_STOP_FAILED, e.getMessage()));
+                }
+            } else {
+                log.info("Argo Workflow 已终态({}), 跳过 terminate 直接置 Cancelled, pipelineRunId={}, name={}",
+                        argoPhase, id, run.getName());
             }
-        } else {
-            log.info("Argo Workflow 已终态({}), 跳过 terminate 直接置 Cancelled, pipelineRunId={}, name={}",
-                    argoPhase, id, run.getName());
+            // 4) 平台直接置 Cancelled（Cancelled 是平台扩展态，覆盖 Argo 的 Failed/Error 语义为用户主动取消）
+            PipelineRun update = new PipelineRun();
+            update.setId(run.getId());
+            update.setRevision(run.getRevision());
+            update.setStatus(PipelineRunStatusEnum.CANCELLED.getCode());
+            update.setFailMessage(PipelineConstants.MSG_RUN_STOP_MESSAGE);
+            update.setEndTime(new Date());
+            if (pipelineRunRepository.updateForSync(update) != 1) {
+                throw new BusinessException(PipelineConstants.MSG_RUN_STATE_CHANGED);
+            }
+            log.info("流水线已停止, pipelineRunId={}, name={}", id, run.getName());
+            // 5) 终态处理：再拉一次详情，落地任务节点记录 + 刷新快照
+            pipelineRunSyncService.handleTerminal(id);
+            return toResponse(pipelineRunRepository.selectById(id));
+        } finally {
+            distributedLockService.unlock(lockKey, lockValue);
         }
-        // 4) 平台直接置 Cancelled（Cancelled 是平台扩展态，覆盖 Argo 的 Failed/Error 语义为用户主动取消）
-        PipelineRun update = new PipelineRun();
-        update.setId(run.getId());
-        update.setRevision(run.getRevision());
-        update.setStatus(PipelineRunStatusEnum.CANCELLED.getCode());
-        update.setFailMessage(PipelineConstants.MSG_RUN_STOP_MESSAGE);
-        update.setEndTime(new Date());
-        if (pipelineRunRepository.updateForSync(update) != 1) {
-            throw new BusinessException(PipelineConstants.MSG_RUN_STATE_CHANGED);
-        }
-        log.info("流水线已停止, pipelineRunId={}, name={}", id, run.getName());
-        // 5) 终态处理：再拉一次详情，落地任务节点记录 + 刷新快照
-        pipelineRunSyncService.handleTerminal(id);
-        return toResponse(pipelineRunRepository.selectById(id));
     }
 
     @Override

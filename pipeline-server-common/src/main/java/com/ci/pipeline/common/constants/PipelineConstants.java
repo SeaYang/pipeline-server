@@ -135,4 +135,9 @@ public final class PipelineConstants {
      * 执行详情快照不存在
      */
     public static final String MSG_RUN_SNAPSHOT_NOT_EXIST = "执行详情快照不存在";
+
+    /**
+     * 操作过于频繁，请稍后重试（分布式锁获取失败）
+     */
+    public static final String MSG_OPERATION_LOCK_FAILED = "操作过于频繁，请稍后重试";
 }
