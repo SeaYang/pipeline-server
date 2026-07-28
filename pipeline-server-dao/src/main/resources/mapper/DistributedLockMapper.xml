@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ci.pipeline.dao.mapper.DistributedLockMapper">
+
+    <resultMap id="BaseResultMap" type="com.ci.pipeline.dao.entity.DistributedLock">
+        <id column="id" property="id"/>
+        <result column="lock_key" property="lockKey"/>
+        <result column="lock_value" property="lockValue"/>
+        <result column="description" property="description"/>
+        <result column="expired_time" property="expiredTime"/>
+        <result column="revision" property="revision"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, lock_key, lock_value, description, expired_time, revision, create_time, update_time
+    </sql>
+
+    <!-- 抢占已过期的锁（CAS） -->
+    <update id="casAcquire">
+        UPDATE distributed_lock
+        SET lock_value   = #{newLockValue},
+            description  = #{description},
+            expired_time = DATE_ADD(NOW(), INTERVAL #{expireSeconds} SECOND),
+            revision     = revision + 1
+        WHERE lock_key = #{key}
+          AND revision = #{oldRevision}
+    </update>
+
+    <!-- 释放锁（校验 lockValue 防误删） -->
+    <update id="release">
+        UPDATE distributed_lock
+        SET expired_time = NOW(),
+            revision     = revision + 1
+        WHERE lock_key   = #{key}
+          AND lock_value = #{lockValue}
+    </update>
+
+    <!-- 续期（校验 lockValue + 未过期） -->
+    <update id="renew">
+        UPDATE distributed_lock
+        SET expired_time = DATE_ADD(NOW(), INTERVAL #{expireSeconds} SECOND),
+            revision     = revision + 1
+        WHERE lock_key   = #{key}
+          AND lock_value = #{lockValue}
+          AND expired_time > NOW()
+    </update>
+
+</mapper>
