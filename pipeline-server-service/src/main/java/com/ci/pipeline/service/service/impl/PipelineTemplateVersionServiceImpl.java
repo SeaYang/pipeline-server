@@ -1,6 +1,7 @@
 package com.ci.pipeline.service.service.impl;
 
 import com.ci.pipeline.common.auth.UserContext;
+import com.ci.pipeline.common.constants.DistributedLockConstants;
 import com.ci.pipeline.common.constants.PipelineTemplateConstants;
 import com.ci.pipeline.common.enums.PipelineTemplateVersionStatusEnum;
 import com.ci.pipeline.common.exception.BusinessException;
@@ -15,6 +16,7 @@ import com.ci.pipeline.facade.response.PipelineTemplateVersionResponse;
 import com.ci.pipeline.facade.response.PipelineTemplateVersionSaveResponse;
 import com.ci.pipeline.service.config.ArgoServerProperties;
 import com.ci.pipeline.service.remote.ArgoWorkflowAgent;
+import com.ci.pipeline.service.service.DistributedLockService;
 import com.ci.pipeline.service.service.PipelineTemplateVersionService;
 import com.ci.pipeline.service.util.ArgoWorkflowUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -66,6 +68,9 @@ public class PipelineTemplateVersionServiceImpl implements PipelineTemplateVersi
     @Autowired
     private PipelineParameterRepository pipelineParameterRepository;
 
+    @Autowired
+    private DistributedLockService distributedLockService;
+
     @Override
     public PipelineTemplateVersionSaveResponse create(PipelineTemplateVersionCreateRequest request) {
         // ① 流水线模板必须存在
@@ -75,81 +80,103 @@ public class PipelineTemplateVersionServiceImpl implements PipelineTemplateVersi
         if (pipelineTemplateRepository.selectByPipelineTemplateCode(request.getPipelineTemplateCode()) == null) {
             throw new BusinessException(PipelineTemplateConstants.MSG_TEMPLATE_NOT_EXIST);
         }
-        // ② 模板详情必填，且需能解析为合法的 Argo WorkflowTemplate
-        if (!StringUtils.hasText(request.getTemplateDetail())) {
-            throw new BusinessException(PipelineTemplateConstants.MSG_TEMPLATE_DETAIL_REQUIRED);
+        // 非阻塞加锁，防止并发或连击
+        String lockKey = DistributedLockConstants.LOCK_KEY_PIPELINE_TEMPLATE + request.getPipelineTemplateCode();
+        String lockValue = distributedLockService.tryLock(
+                lockKey, DistributedLockConstants.DEFAULT_LOCK_EXPIRE_SECONDS, "新增流水线模板版本");
+        if (lockValue == null) {
+            throw new BusinessException(PipelineTemplateConstants.MSG_OPERATION_LOCK_FAILED);
         }
-        IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate = parseWorkflowTemplate(request.getTemplateDetail());
-        // 校验模板详情 metadata.name 与流水线模板编码一致
-        validateTemplateNameMatchCode(workflowTemplate, request.getPipelineTemplateCode());
-        // 校验模板参数是否都在参数定义表中配置，未定义则直接返回（不保存）
-        List<String> undefined = findUndefinedParams(request.getTemplateDetail());
-        if (!undefined.isEmpty()) {
-            return PipelineTemplateVersionSaveResponse.undefined(undefined);
-        }
-        // ③ 版本号格式校验
-        if (!StringUtils.hasText(request.getVersion())) {
-            throw new BusinessException(PipelineTemplateConstants.MSG_VERSION_REQUIRED);
-        }
-        int[] newVer = parseVersion(request.getVersion());
-        // ④ (pipeline_template_code, version) 唯一性
-        if (pipelineTemplateVersionRepository.selectByCodeAndVersion(
-                request.getPipelineTemplateCode(), request.getVersion()) != null) {
-            throw new BusinessException(String.format(
-                    PipelineTemplateConstants.MSG_VERSION_DUPLICATED,
-                    request.getPipelineTemplateCode(), request.getVersion()));
-        }
-        // ⑤ 版本递增规则校验（只能递增不能递减，相对当前最大版本）
-        validateIncrement(request.getPipelineTemplateCode(), newVer, request.getVersion());
+        try {
+            // ② 模板详情必填，且需能解析为合法的 Argo WorkflowTemplate
+            if (!StringUtils.hasText(request.getTemplateDetail())) {
+                throw new BusinessException(PipelineTemplateConstants.MSG_TEMPLATE_DETAIL_REQUIRED);
+            }
+            IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate = parseWorkflowTemplate(request.getTemplateDetail());
+            // 校验模板详情 metadata.name 与流水线模板编码一致
+            validateTemplateNameMatchCode(workflowTemplate, request.getPipelineTemplateCode());
+            // 校验模板参数是否都在参数定义表中配置，未定义则直接返回（不保存）
+            List<String> undefined = findUndefinedParams(request.getTemplateDetail());
+            if (!undefined.isEmpty()) {
+                return PipelineTemplateVersionSaveResponse.undefined(undefined);
+            }
+            // ③ 版本号格式校验
+            if (!StringUtils.hasText(request.getVersion())) {
+                throw new BusinessException(PipelineTemplateConstants.MSG_VERSION_REQUIRED);
+            }
+            int[] newVer = parseVersion(request.getVersion());
+            // ④ (pipeline_template_code, version) 唯一性
+            if (pipelineTemplateVersionRepository.selectByCodeAndVersion(
+                    request.getPipelineTemplateCode(), request.getVersion()) != null) {
+                throw new BusinessException(String.format(
+                        PipelineTemplateConstants.MSG_VERSION_DUPLICATED,
+                        request.getPipelineTemplateCode(), request.getVersion()));
+            }
+            // ⑤ 版本递增规则校验（只能递增不能递减，相对当前最大版本）
+            validateIncrement(request.getPipelineTemplateCode(), newVer, request.getVersion());
 
-        PipelineTemplateVersion entity = new PipelineTemplateVersion();
-        BeanUtils.copyProperties(request, entity);
-        entity.setCreator(UserContext.getUserId());
-        // 新版本默认草稿
-        entity.setStatus(PipelineTemplateVersionStatusEnum.DRAFT.getCode());
-        pipelineTemplateVersionRepository.insert(entity);
-        log.info("新增流水线模板版本成功, pipelineTemplateCode={}, version={}, id={}",
-                entity.getPipelineTemplateCode(), entity.getVersion(), entity.getId());
-        return PipelineTemplateVersionSaveResponse.ok(
-                toResponse(pipelineTemplateVersionRepository.selectById(entity.getId())));
+            PipelineTemplateVersion entity = new PipelineTemplateVersion();
+            BeanUtils.copyProperties(request, entity);
+            entity.setCreator(UserContext.getUserId());
+            // 新版本默认草稿
+            entity.setStatus(PipelineTemplateVersionStatusEnum.DRAFT.getCode());
+            pipelineTemplateVersionRepository.insert(entity);
+            log.info("新增流水线模板版本成功, pipelineTemplateCode={}, version={}, id={}",
+                    entity.getPipelineTemplateCode(), entity.getVersion(), entity.getId());
+            return PipelineTemplateVersionSaveResponse.ok(
+                    toResponse(pipelineTemplateVersionRepository.selectById(entity.getId())));
+        } finally {
+            distributedLockService.unlock(lockKey, lockValue);
+        }
     }
 
     @Override
     public PipelineTemplateVersionSaveResponse update(PipelineTemplateVersionUpdateRequest request) {
         requireCodeAndVersion(request.getPipelineTemplateCode(), request.getVersion());
-        PipelineTemplateVersion existing = pipelineTemplateVersionRepository.selectByCodeAndVersion(
-                request.getPipelineTemplateCode(), request.getVersion());
-        if (existing == null) {
-            throw new BusinessException(PipelineTemplateConstants.MSG_VERSION_NOT_EXIST);
+        // 非阻塞加锁，防止并发或连击
+        String lockKey = DistributedLockConstants.LOCK_KEY_PIPELINE_TEMPLATE + request.getPipelineTemplateCode();
+        String lockValue = distributedLockService.tryLock(
+                lockKey, DistributedLockConstants.DEFAULT_LOCK_EXPIRE_SECONDS, "修改流水线模板版本");
+        if (lockValue == null) {
+            throw new BusinessException(PipelineTemplateConstants.MSG_OPERATION_LOCK_FAILED);
         }
-        // 仅草稿状态的版本允许修改（生效中 / 已失效需通过「新增版本」走版本变更）
-        if (!PipelineTemplateVersionStatusEnum.DRAFT.getCode().equals(existing.getStatus())) {
-            throw new BusinessException(String.format(
-                    PipelineTemplateConstants.MSG_VERSION_UPDATE_STATUS_INVALID, existing.getStatus()));
+        try {
+            PipelineTemplateVersion existing = pipelineTemplateVersionRepository.selectByCodeAndVersion(
+                    request.getPipelineTemplateCode(), request.getVersion());
+            if (existing == null) {
+                throw new BusinessException(PipelineTemplateConstants.MSG_VERSION_NOT_EXIST);
+            }
+            // 仅草稿状态的版本允许修改（生效中 / 已失效需通过「新增版本」走版本变更）
+            if (!PipelineTemplateVersionStatusEnum.DRAFT.getCode().equals(existing.getStatus())) {
+                throw new BusinessException(String.format(
+                        PipelineTemplateConstants.MSG_VERSION_UPDATE_STATUS_INVALID, existing.getStatus()));
+            }
+            // 模板详情必填，且需能解析为合法的 Argo WorkflowTemplate
+            if (!StringUtils.hasText(request.getTemplateDetail())) {
+                throw new BusinessException(PipelineTemplateConstants.MSG_TEMPLATE_DETAIL_REQUIRED);
+            }
+            IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate = parseWorkflowTemplate(request.getTemplateDetail());
+            // 校验模板详情 metadata.name 与流水线模板编码一致
+            validateTemplateNameMatchCode(workflowTemplate, request.getPipelineTemplateCode());
+            // 校验模板参数是否都在参数定义表中配置，未定义则直接返回（不保存）
+            List<String> undefined = findUndefinedParams(request.getTemplateDetail());
+            if (!undefined.isEmpty()) {
+                return PipelineTemplateVersionSaveResponse.undefined(undefined);
+            }
+            // 仅允许修改 templateDetail / changeNote，version 为业务键不可改、status 走状态变更接口
+            PipelineTemplateVersion entity = new PipelineTemplateVersion();
+            entity.setId(existing.getId());
+            entity.setTemplateDetail(request.getTemplateDetail());
+            entity.setChangeNote(request.getChangeNote());
+            pipelineTemplateVersionRepository.updateById(entity);
+            log.info("修改流水线模板版本成功, pipelineTemplateCode={}, version={}",
+                    request.getPipelineTemplateCode(), request.getVersion());
+            return PipelineTemplateVersionSaveResponse.ok(toResponse(
+                    pipelineTemplateVersionRepository.selectByCodeAndVersion(
+                            request.getPipelineTemplateCode(), request.getVersion())));
+        } finally {
+            distributedLockService.unlock(lockKey, lockValue);
         }
-        // 模板详情必填，且需能解析为合法的 Argo WorkflowTemplate
-        if (!StringUtils.hasText(request.getTemplateDetail())) {
-            throw new BusinessException(PipelineTemplateConstants.MSG_TEMPLATE_DETAIL_REQUIRED);
-        }
-        IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate = parseWorkflowTemplate(request.getTemplateDetail());
-        // 校验模板详情 metadata.name 与流水线模板编码一致
-        validateTemplateNameMatchCode(workflowTemplate, request.getPipelineTemplateCode());
-        // 校验模板参数是否都在参数定义表中配置，未定义则直接返回（不保存）
-        List<String> undefined = findUndefinedParams(request.getTemplateDetail());
-        if (!undefined.isEmpty()) {
-            return PipelineTemplateVersionSaveResponse.undefined(undefined);
-        }
-        // 仅允许修改 templateDetail / changeNote，version 为业务键不可改、status 走状态变更接口
-        PipelineTemplateVersion entity = new PipelineTemplateVersion();
-        entity.setId(existing.getId());
-        entity.setTemplateDetail(request.getTemplateDetail());
-        entity.setChangeNote(request.getChangeNote());
-        pipelineTemplateVersionRepository.updateById(entity);
-        log.info("修改流水线模板版本成功, pipelineTemplateCode={}, version={}",
-                request.getPipelineTemplateCode(), request.getVersion());
-        return PipelineTemplateVersionSaveResponse.ok(toResponse(
-                pipelineTemplateVersionRepository.selectByCodeAndVersion(
-                        request.getPipelineTemplateCode(), request.getVersion())));
     }
 
     @Override
@@ -204,39 +231,50 @@ public class PipelineTemplateVersionServiceImpl implements PipelineTemplateVersi
             throw new BusinessException(String.format(
                     PipelineTemplateConstants.MSG_VERSION_STATUS_INVALID, request.getStatus()));
         }
-        PipelineTemplateVersion existing = pipelineTemplateVersionRepository.selectByCodeAndVersion(
-                request.getPipelineTemplateCode(), request.getVersion());
-        if (existing == null) {
-            throw new BusinessException(PipelineTemplateConstants.MSG_VERSION_NOT_EXIST);
+        // 非阻塞加锁，防止并发或连击
+        String lockKey = DistributedLockConstants.LOCK_KEY_PIPELINE_TEMPLATE + request.getPipelineTemplateCode();
+        String lockValue = distributedLockService.tryLock(
+                lockKey, DistributedLockConstants.DEFAULT_LOCK_EXPIRE_SECONDS, "发布流水线模板版本");
+        if (lockValue == null) {
+            throw new BusinessException(PipelineTemplateConstants.MSG_OPERATION_LOCK_FAILED);
         }
-
-        // 幂等：目标状态与当前状态一致时直接返回，不重复触发副作用（如失效其它版本）
-        if (existing.getStatus().equals(request.getStatus())) {
-            log.info("流水线模板版本状态未变化，跳过更新（幂等）, pipelineTemplateCode={}, version={}, status={}",
-                    request.getPipelineTemplateCode(), request.getVersion(), request.getStatus());
-            return toResponse(existing);
-        }
-
-        // 发布（目标为生效中）：落库前先打通 argo——不存在则创建，存在则更新；
-        // 并校验模板详情 metadata.name 与流水线模板编码一致
-        if (PipelineTemplateVersionStatusEnum.EFFECTIVE.getCode().equals(request.getStatus())) {
-            IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate =
-                    parseWorkflowTemplate(existing.getTemplateDetail());
-            validateTemplateNameMatchCode(workflowTemplate, request.getPipelineTemplateCode());
-            argoWorkflowAgent.saveWorkflowTemplate(argoServerProperties.getNamespace(), workflowTemplate);
-        }
-
-        // 目标为生效中时，其它尚未失效的版本（生效中 / 草稿）统一自动置为已失效
-        if (PipelineTemplateVersionStatusEnum.EFFECTIVE.getCode().equals(request.getStatus())) {
-            pipelineTemplateVersionRepository.updateOtherStatusToExpired(
+        try {
+            PipelineTemplateVersion existing = pipelineTemplateVersionRepository.selectByCodeAndVersion(
                     request.getPipelineTemplateCode(), request.getVersion());
+            if (existing == null) {
+                throw new BusinessException(PipelineTemplateConstants.MSG_VERSION_NOT_EXIST);
+            }
+
+            // 幂等：目标状态与当前状态一致时直接返回，不重复触发副作用（如失效其它版本）
+            if (existing.getStatus().equals(request.getStatus())) {
+                log.info("流水线模板版本状态未变化，跳过更新（幂等）, pipelineTemplateCode={}, version={}, status={}",
+                        request.getPipelineTemplateCode(), request.getVersion(), request.getStatus());
+                return toResponse(existing);
+            }
+
+            // 发布（目标为生效中）：落库前先打通 argo——不存在则创建，存在则更新；
+            // 并校验模板详情 metadata.name 与流水线模板编码一致
+            if (PipelineTemplateVersionStatusEnum.EFFECTIVE.getCode().equals(request.getStatus())) {
+                IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate =
+                        parseWorkflowTemplate(existing.getTemplateDetail());
+                validateTemplateNameMatchCode(workflowTemplate, request.getPipelineTemplateCode());
+                argoWorkflowAgent.saveWorkflowTemplate(argoServerProperties.getNamespace(), workflowTemplate);
+            }
+
+            // 目标为生效中时，其它尚未失效的版本（生效中 / 草稿）统一自动置为已失效
+            if (PipelineTemplateVersionStatusEnum.EFFECTIVE.getCode().equals(request.getStatus())) {
+                pipelineTemplateVersionRepository.updateOtherStatusToExpired(
+                        request.getPipelineTemplateCode(), request.getVersion());
+            }
+            pipelineTemplateVersionRepository.updateStatusByCodeAndVersion(
+                    request.getPipelineTemplateCode(), request.getVersion(), request.getStatus());
+            log.info("变更流水线模板版本状态成功, pipelineTemplateCode={}, version={}, status={}",
+                    request.getPipelineTemplateCode(), request.getVersion(), request.getStatus());
+            return toResponse(pipelineTemplateVersionRepository.selectByCodeAndVersion(
+                    request.getPipelineTemplateCode(), request.getVersion()));
+        } finally {
+            distributedLockService.unlock(lockKey, lockValue);
         }
-        pipelineTemplateVersionRepository.updateStatusByCodeAndVersion(
-                request.getPipelineTemplateCode(), request.getVersion(), request.getStatus());
-        log.info("变更流水线模板版本状态成功, pipelineTemplateCode={}, version={}, status={}",
-                request.getPipelineTemplateCode(), request.getVersion(), request.getStatus());
-        return toResponse(pipelineTemplateVersionRepository.selectByCodeAndVersion(
-                request.getPipelineTemplateCode(), request.getVersion()));
     }
 
     // ===== 私有工具方法 =====

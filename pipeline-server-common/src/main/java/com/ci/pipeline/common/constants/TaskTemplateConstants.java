@@ -17,6 +17,11 @@ public final class TaskTemplateConstants {
      */
     public static final String DICT_TYPE_TASK_TEMPLATE_GROUP = "task-template-group";
 
+    /**
+     * 任务模板编码格式：小写字母，多段用 - 连接，如 a、a-b、a-b-c
+     */
+    public static final String CODE_REGEX = "^[a-z]+(-[a-z]+)*$";
+
     // ===== 任务模板提示信息 =====
 
     /**
@@ -106,4 +111,21 @@ public final class TaskTemplateConstants {
      * 版本状态非法（参数：传入的状态值）
      */
     public static final String MSG_VERSION_STATUS_INVALID = "版本状态非法，仅支持 DRAFT / EFFECTIVE / EXPIRED，传入：%s";
+
+    /**
+     * 任务模板编码格式不正确（参数：task_template_code）
+     */
+    public static final String MSG_TEMPLATE_CODE_FORMAT_INVALID =
+            "任务模板编码格式不正确，需为小写字母并用 - 连接的多段格式，如 a、a-b、a-b-c，传入：%s";
+
+    /**
+     * 任务模板编码与流水线模板编码冲突（参数：code）
+     */
+    public static final String MSG_TEMPLATE_CODE_CONFLICT_PIPELINE =
+            "编码[%s]在流水线模板中已存在，任务模板与流水线模板编码需全局唯一";
+
+    /**
+     * 操作过于频繁，请稍后重试（分布式锁获取失败）
+     */
+    public static final String MSG_OPERATION_LOCK_FAILED = "操作过于频繁，请稍后重试";
 }

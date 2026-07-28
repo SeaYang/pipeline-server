@@ -9,11 +9,11 @@ public final class PipelineParameterConstants {
     }
 
     // ---- 参数名格式 ----
-    public static final String NAME_REGEX = "^[a-z][a-z0-9-]*$";
+    public static final String NAME_REGEX = "^[a-z]+(-[a-z]+)*$";
 
     // ---- 校验提示信息 ----
     public static final String MSG_NAME_REQUIRED = "参数名不能为空";
-    public static final String MSG_NAME_FORMAT = "参数名格式不正确，需符合 ^[a-z][a-z0-9-]*$";
+    public static final String MSG_NAME_FORMAT = "参数名格式不正确，需为小写字母并用 - 连接的多段格式，如 a、a-b、a-b-c";
     public static final String MSG_NAME_DUPLICATED = "参数名已存在：%s";
     public static final String MSG_LABEL_REQUIRED = "参数中文名称不能为空";
     public static final String MSG_PARAM_TYPE_REQUIRED = "参数类型不能为空";
@@ -35,4 +35,7 @@ public final class PipelineParameterConstants {
     public static final String MSG_PARAM_REQUIRED = "参数[%s]不能为空";
     public static final String MSG_PARAM_REGEX_FAIL = "参数[%s]格式不正确";
     public static final String MSG_PARAM_UNDEFINED = "流水线模板中含有未定义的参数配置，请先在参数定义页面补充：%s";
+
+    /** 操作过于频繁，请稍后重试（分布式锁获取失败） */
+    public static final String MSG_OPERATION_LOCK_FAILED = "操作过于频繁，请稍后重试";
 }

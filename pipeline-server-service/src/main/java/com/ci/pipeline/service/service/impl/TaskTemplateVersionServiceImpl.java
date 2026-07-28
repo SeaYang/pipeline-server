@@ -1,6 +1,7 @@
 package com.ci.pipeline.service.service.impl;
 
 import com.ci.pipeline.common.auth.UserContext;
+import com.ci.pipeline.common.constants.DistributedLockConstants;
 import com.ci.pipeline.common.constants.TaskTemplateConstants;
 import com.ci.pipeline.common.enums.TaskTemplateVersionStatusEnum;
 import com.ci.pipeline.common.exception.BusinessException;
@@ -13,6 +14,7 @@ import com.ci.pipeline.facade.request.TaskTemplateVersionUpdateRequest;
 import com.ci.pipeline.facade.response.TaskTemplateVersionResponse;
 import com.ci.pipeline.service.config.ArgoServerProperties;
 import com.ci.pipeline.service.remote.ArgoWorkflowAgent;
+import com.ci.pipeline.service.service.DistributedLockService;
 import com.ci.pipeline.service.service.TaskTemplateVersionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.argoproj.workflow.models.IoArgoprojWorkflowV1alpha1WorkflowTemplate;
@@ -56,6 +58,9 @@ public class TaskTemplateVersionServiceImpl implements TaskTemplateVersionServic
     @Autowired
     private ArgoServerProperties argoServerProperties;
 
+    @Autowired
+    private DistributedLockService distributedLockService;
+
     @Override
     public TaskTemplateVersionResponse create(TaskTemplateVersionCreateRequest request) {
         // ① 任务模板必须存在
@@ -65,68 +70,90 @@ public class TaskTemplateVersionServiceImpl implements TaskTemplateVersionServic
         if (taskTemplateRepository.selectByTaskTemplateCode(request.getTaskTemplateCode()) == null) {
             throw new BusinessException(TaskTemplateConstants.MSG_TEMPLATE_NOT_EXIST);
         }
-        // ② 模板详情必填，且需能解析为合法的 Argo WorkflowTemplate
-        if (!StringUtils.hasText(request.getTemplateDetail())) {
-            throw new BusinessException(TaskTemplateConstants.MSG_TEMPLATE_DETAIL_REQUIRED);
+        // 非阻塞加锁，防止并发或连击
+        String lockKey = DistributedLockConstants.LOCK_KEY_TASK_TEMPLATE + request.getTaskTemplateCode();
+        String lockValue = distributedLockService.tryLock(
+                lockKey, DistributedLockConstants.DEFAULT_LOCK_EXPIRE_SECONDS, "新增任务模板版本");
+        if (lockValue == null) {
+            throw new BusinessException(TaskTemplateConstants.MSG_OPERATION_LOCK_FAILED);
         }
-        IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate = parseWorkflowTemplate(request.getTemplateDetail());
-        // 校验模板详情 metadata.name 与任务模板编码一致
-        validateTemplateNameMatchCode(workflowTemplate, request.getTaskTemplateCode());
-        // ③ 版本号格式校验
-        if (!StringUtils.hasText(request.getVersion())) {
-            throw new BusinessException(TaskTemplateConstants.MSG_VERSION_REQUIRED);
-        }
-        int[] newVer = parseVersion(request.getVersion());
-        // ④ (task_template_code, version) 唯一性
-        if (taskTemplateVersionRepository.selectByCodeAndVersion(
-                request.getTaskTemplateCode(), request.getVersion()) != null) {
-            throw new BusinessException(String.format(
-                    TaskTemplateConstants.MSG_VERSION_DUPLICATED, request.getTaskTemplateCode(), request.getVersion()));
-        }
-        // ⑤ 版本递增规则校验（相对当前最大版本）
-        validateIncrement(request.getTaskTemplateCode(), newVer, request.getVersion());
+        try {
+            // ② 模板详情必填，且需能解析为合法的 Argo WorkflowTemplate
+            if (!StringUtils.hasText(request.getTemplateDetail())) {
+                throw new BusinessException(TaskTemplateConstants.MSG_TEMPLATE_DETAIL_REQUIRED);
+            }
+            IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate = parseWorkflowTemplate(request.getTemplateDetail());
+            // 校验模板详情 metadata.name 与任务模板编码一致
+            validateTemplateNameMatchCode(workflowTemplate, request.getTaskTemplateCode());
+            // ③ 版本号格式校验
+            if (!StringUtils.hasText(request.getVersion())) {
+                throw new BusinessException(TaskTemplateConstants.MSG_VERSION_REQUIRED);
+            }
+            int[] newVer = parseVersion(request.getVersion());
+            // ④ (task_template_code, version) 唯一性
+            if (taskTemplateVersionRepository.selectByCodeAndVersion(
+                    request.getTaskTemplateCode(), request.getVersion()) != null) {
+                throw new BusinessException(String.format(
+                        TaskTemplateConstants.MSG_VERSION_DUPLICATED, request.getTaskTemplateCode(), request.getVersion()));
+            }
+            // ⑤ 版本递增规则校验（相对当前最大版本）
+            validateIncrement(request.getTaskTemplateCode(), newVer, request.getVersion());
 
-        TaskTemplateVersion entity = new TaskTemplateVersion();
-        BeanUtils.copyProperties(request, entity);
-        entity.setCreator(UserContext.getUserId());
-        // 新版本默认草稿
-        entity.setStatus(TaskTemplateVersionStatusEnum.DRAFT.getCode());
-        taskTemplateVersionRepository.insert(entity);
-        log.info("新增任务模板版本成功, taskTemplateCode={}, version={}, id={}",
-                entity.getTaskTemplateCode(), entity.getVersion(), entity.getId());
-        return toResponse(taskTemplateVersionRepository.selectById(entity.getId()));
+            TaskTemplateVersion entity = new TaskTemplateVersion();
+            BeanUtils.copyProperties(request, entity);
+            entity.setCreator(UserContext.getUserId());
+            // 新版本默认草稿
+            entity.setStatus(TaskTemplateVersionStatusEnum.DRAFT.getCode());
+            taskTemplateVersionRepository.insert(entity);
+            log.info("新增任务模板版本成功, taskTemplateCode={}, version={}, id={}",
+                    entity.getTaskTemplateCode(), entity.getVersion(), entity.getId());
+            return toResponse(taskTemplateVersionRepository.selectById(entity.getId()));
+        } finally {
+            distributedLockService.unlock(lockKey, lockValue);
+        }
     }
 
     @Override
     public TaskTemplateVersionResponse update(TaskTemplateVersionUpdateRequest request) {
         requireCodeAndVersion(request.getTaskTemplateCode(), request.getVersion());
-        TaskTemplateVersion existing = taskTemplateVersionRepository.selectByCodeAndVersion(
-                request.getTaskTemplateCode(), request.getVersion());
-        if (existing == null) {
-            throw new BusinessException(TaskTemplateConstants.MSG_VERSION_NOT_EXIST);
+        // 非阻塞加锁，防止并发或连击
+        String lockKey = DistributedLockConstants.LOCK_KEY_TASK_TEMPLATE + request.getTaskTemplateCode();
+        String lockValue = distributedLockService.tryLock(
+                lockKey, DistributedLockConstants.DEFAULT_LOCK_EXPIRE_SECONDS, "修改任务模板版本");
+        if (lockValue == null) {
+            throw new BusinessException(TaskTemplateConstants.MSG_OPERATION_LOCK_FAILED);
         }
-        // 仅草稿状态的版本允许修改（生效中 / 已失效需通过「新增版本」走版本变更）
-        if (!TaskTemplateVersionStatusEnum.DRAFT.getCode().equals(existing.getStatus())) {
-            throw new BusinessException(String.format(
-                    TaskTemplateConstants.MSG_VERSION_UPDATE_STATUS_INVALID, existing.getStatus()));
+        try {
+            TaskTemplateVersion existing = taskTemplateVersionRepository.selectByCodeAndVersion(
+                    request.getTaskTemplateCode(), request.getVersion());
+            if (existing == null) {
+                throw new BusinessException(TaskTemplateConstants.MSG_VERSION_NOT_EXIST);
+            }
+            // 仅草稿状态的版本允许修改（生效中 / 已失效需通过「新增版本」走版本变更）
+            if (!TaskTemplateVersionStatusEnum.DRAFT.getCode().equals(existing.getStatus())) {
+                throw new BusinessException(String.format(
+                        TaskTemplateConstants.MSG_VERSION_UPDATE_STATUS_INVALID, existing.getStatus()));
+            }
+            // 模板详情必填，且需能解析为合法的 Argo WorkflowTemplate
+            if (!StringUtils.hasText(request.getTemplateDetail())) {
+                throw new BusinessException(TaskTemplateConstants.MSG_TEMPLATE_DETAIL_REQUIRED);
+            }
+            IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate = parseWorkflowTemplate(request.getTemplateDetail());
+            // 校验模板详情 metadata.name 与任务模板编码一致
+            validateTemplateNameMatchCode(workflowTemplate, request.getTaskTemplateCode());
+            // 仅允许修改 templateDetail / changeNote，version 为业务键不可改、status 走状态变更接口
+            TaskTemplateVersion entity = new TaskTemplateVersion();
+            entity.setId(existing.getId());
+            entity.setTemplateDetail(request.getTemplateDetail());
+            entity.setChangeNote(request.getChangeNote());
+            taskTemplateVersionRepository.updateById(entity);
+            log.info("修改任务模板版本成功, taskTemplateCode={}, version={}",
+                    request.getTaskTemplateCode(), request.getVersion());
+            return toResponse(taskTemplateVersionRepository.selectByCodeAndVersion(
+                    request.getTaskTemplateCode(), request.getVersion()));
+        } finally {
+            distributedLockService.unlock(lockKey, lockValue);
         }
-        // 模板详情必填，且需能解析为合法的 Argo WorkflowTemplate
-        if (!StringUtils.hasText(request.getTemplateDetail())) {
-            throw new BusinessException(TaskTemplateConstants.MSG_TEMPLATE_DETAIL_REQUIRED);
-        }
-        IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate = parseWorkflowTemplate(request.getTemplateDetail());
-        // 校验模板详情 metadata.name 与任务模板编码一致
-        validateTemplateNameMatchCode(workflowTemplate, request.getTaskTemplateCode());
-        // 仅允许修改 templateDetail / changeNote，version 为业务键不可改、status 走状态变更接口
-        TaskTemplateVersion entity = new TaskTemplateVersion();
-        entity.setId(existing.getId());
-        entity.setTemplateDetail(request.getTemplateDetail());
-        entity.setChangeNote(request.getChangeNote());
-        taskTemplateVersionRepository.updateById(entity);
-        log.info("修改任务模板版本成功, taskTemplateCode={}, version={}",
-                request.getTaskTemplateCode(), request.getVersion());
-        return toResponse(taskTemplateVersionRepository.selectByCodeAndVersion(
-                request.getTaskTemplateCode(), request.getVersion()));
     }
 
     @Override
@@ -180,39 +207,50 @@ public class TaskTemplateVersionServiceImpl implements TaskTemplateVersionServic
             throw new BusinessException(String.format(
                     TaskTemplateConstants.MSG_VERSION_STATUS_INVALID, request.getStatus()));
         }
-        TaskTemplateVersion existing = taskTemplateVersionRepository.selectByCodeAndVersion(
-                request.getTaskTemplateCode(), request.getVersion());
-        if (existing == null) {
-            throw new BusinessException(TaskTemplateConstants.MSG_VERSION_NOT_EXIST);
+        // 非阻塞加锁，防止并发或连击
+        String lockKey = DistributedLockConstants.LOCK_KEY_TASK_TEMPLATE + request.getTaskTemplateCode();
+        String lockValue = distributedLockService.tryLock(
+                lockKey, DistributedLockConstants.DEFAULT_LOCK_EXPIRE_SECONDS, "发布任务模板版本");
+        if (lockValue == null) {
+            throw new BusinessException(TaskTemplateConstants.MSG_OPERATION_LOCK_FAILED);
         }
-
-        // 幂等：目标状态与当前状态一致时直接返回，不重复触发副作用（如失效其它版本）
-        if (existing.getStatus().equals(request.getStatus())) {
-            log.info("任务模板版本状态未变化，跳过更新（幂等）, taskTemplateCode={}, version={}, status={}",
-                    request.getTaskTemplateCode(), request.getVersion(), request.getStatus());
-            return toResponse(existing);
-        }
-
-        // 发布（目标为生效中）：落库前先打通 argo——不存在则创建，存在则更新；
-        // 并校验模板详情 metadata.name 与任务模板编码一致
-        if (TaskTemplateVersionStatusEnum.EFFECTIVE.getCode().equals(request.getStatus())) {
-            IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate =
-                    parseWorkflowTemplate(existing.getTemplateDetail());
-            validateTemplateNameMatchCode(workflowTemplate, request.getTaskTemplateCode());
-            argoWorkflowAgent.saveWorkflowTemplate(argoServerProperties.getNamespace(), workflowTemplate);
-        }
-
-        // 目标为生效中时，其它尚未失效的版本（生效中 / 草稿）统一自动置为已失效
-        if (TaskTemplateVersionStatusEnum.EFFECTIVE.getCode().equals(request.getStatus())) {
-            taskTemplateVersionRepository.updateOtherStatusToExpired(
+        try {
+            TaskTemplateVersion existing = taskTemplateVersionRepository.selectByCodeAndVersion(
                     request.getTaskTemplateCode(), request.getVersion());
+            if (existing == null) {
+                throw new BusinessException(TaskTemplateConstants.MSG_VERSION_NOT_EXIST);
+            }
+
+            // 幂等：目标状态与当前状态一致时直接返回，不重复触发副作用（如失效其它版本）
+            if (existing.getStatus().equals(request.getStatus())) {
+                log.info("任务模板版本状态未变化，跳过更新（幂等）, taskTemplateCode={}, version={}, status={}",
+                        request.getTaskTemplateCode(), request.getVersion(), request.getStatus());
+                return toResponse(existing);
+            }
+
+            // 发布（目标为生效中）：落库前先打通 argo——不存在则创建，存在则更新；
+            // 并校验模板详情 metadata.name 与任务模板编码一致
+            if (TaskTemplateVersionStatusEnum.EFFECTIVE.getCode().equals(request.getStatus())) {
+                IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate =
+                        parseWorkflowTemplate(existing.getTemplateDetail());
+                validateTemplateNameMatchCode(workflowTemplate, request.getTaskTemplateCode());
+                argoWorkflowAgent.saveWorkflowTemplate(argoServerProperties.getNamespace(), workflowTemplate);
+            }
+
+            // 目标为生效中时，其它尚未失效的版本（生效中 / 草稿）统一自动置为已失效
+            if (TaskTemplateVersionStatusEnum.EFFECTIVE.getCode().equals(request.getStatus())) {
+                taskTemplateVersionRepository.updateOtherStatusToExpired(
+                        request.getTaskTemplateCode(), request.getVersion());
+            }
+            taskTemplateVersionRepository.updateStatusByCodeAndVersion(
+                    request.getTaskTemplateCode(), request.getVersion(), request.getStatus());
+            log.info("变更任务模板版本状态成功, taskTemplateCode={}, version={}, status={}",
+                    request.getTaskTemplateCode(), request.getVersion(), request.getStatus());
+            return toResponse(taskTemplateVersionRepository.selectByCodeAndVersion(
+                    request.getTaskTemplateCode(), request.getVersion()));
+        } finally {
+            distributedLockService.unlock(lockKey, lockValue);
         }
-        taskTemplateVersionRepository.updateStatusByCodeAndVersion(
-                request.getTaskTemplateCode(), request.getVersion(), request.getStatus());
-        log.info("变更任务模板版本状态成功, taskTemplateCode={}, version={}, status={}",
-                request.getTaskTemplateCode(), request.getVersion(), request.getStatus());
-        return toResponse(taskTemplateVersionRepository.selectByCodeAndVersion(
-                request.getTaskTemplateCode(), request.getVersion()));
     }
 
     // ===== 私有工具方法 =====
