@@ -5,6 +5,7 @@ import com.alibaba.fastjson.JSONArray;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.ci.pipeline.common.auth.UserContext;
 import com.ci.pipeline.common.constants.CommonConstants;
+import com.ci.pipeline.common.constants.DistributedLockConstants;
 import com.ci.pipeline.common.constants.PipelineConstants;
 import com.ci.pipeline.common.constants.PipelineParameterConstants;
 import com.ci.pipeline.common.enums.ComponentTypeEnum;
@@ -26,6 +27,7 @@ import com.ci.pipeline.facade.request.PipelineParametersRequest;
 import com.ci.pipeline.facade.response.PageResponse;
 import com.ci.pipeline.facade.response.PipelineParameterResponse;
 import com.ci.pipeline.facade.response.PipelineRunParameterResponse;
+import com.ci.pipeline.service.service.DistributedLockService;
 import com.ci.pipeline.service.service.PipelineParameterService;
 import com.ci.pipeline.service.strategy.pipeline.parameter.PipelineParameterStrategyManager;
 import com.ci.pipeline.service.strategy.ParamResolveContext;
@@ -82,6 +84,9 @@ public class PipelineParameterServiceImpl implements PipelineParameterService {
     @Autowired
     private PipelineParameterStrategyManager pipelineParameterStrategyManager;
 
+    @Autowired
+    private DistributedLockService distributedLockService;
+
     // ============================== CRUD ==============================
 
     @Override
@@ -91,20 +96,31 @@ public class PipelineParameterServiceImpl implements PipelineParameterService {
         validateEnumFields(request.getComponentType(), request.getParamType());
         validateJsonFields(request.getOptionConfig(), request.getDefaultValueStrategyConfig(), request.getDependParams());
 
-        if (pipelineParameterRepository.countByName(request.getName(), null) > 0) {
-            throw new BusinessException(String.format(
-                    PipelineParameterConstants.MSG_NAME_DUPLICATED, request.getName()));
+        // 非阻塞加锁，防止并发或连击
+        String lockKey = DistributedLockConstants.LOCK_KEY_PIPELINE_PARAMETER + request.getName();
+        String lockValue = distributedLockService.tryLock(
+                lockKey, DistributedLockConstants.DEFAULT_LOCK_EXPIRE_SECONDS, "新增参数定义");
+        if (lockValue == null) {
+            throw new BusinessException(PipelineParameterConstants.MSG_OPERATION_LOCK_FAILED);
         }
+        try {
+            if (pipelineParameterRepository.countByName(request.getName(), null) > 0) {
+                throw new BusinessException(String.format(
+                        PipelineParameterConstants.MSG_NAME_DUPLICATED, request.getName()));
+            }
 
-        validateDependParams(request.getDependParams(), null, request.getName());
+            validateDependParams(request.getDependParams(), null, request.getName());
 
-        PipelineParameter entity = new PipelineParameter();
-        BeanUtils.copyProperties(request, entity);
-        applyDefaults(entity);
-        entity.setCreator(UserContext.getUserId());
-        pipelineParameterRepository.insert(entity);
-        log.info("新增参数定义成功, name={}, id={}", entity.getName(), entity.getId());
-        return toResponse(pipelineParameterRepository.selectById(entity.getId()));
+            PipelineParameter entity = new PipelineParameter();
+            BeanUtils.copyProperties(request, entity);
+            applyDefaults(entity);
+            entity.setCreator(UserContext.getUserId());
+            pipelineParameterRepository.insert(entity);
+            log.info("新增参数定义成功, name={}, id={}", entity.getName(), entity.getId());
+            return toResponse(pipelineParameterRepository.selectById(entity.getId()));
+        } finally {
+            distributedLockService.unlock(lockKey, lockValue);
+        }
     }
 
     @Override
@@ -121,18 +137,29 @@ public class PipelineParameterServiceImpl implements PipelineParameterService {
         validateEnumFields(request.getComponentType(), request.getParamType());
         validateJsonFields(request.getOptionConfig(), request.getDefaultValueStrategyConfig(), request.getDependParams());
 
-        if (pipelineParameterRepository.countByName(request.getName(), request.getId()) > 0) {
-            throw new BusinessException(String.format(
-                    PipelineParameterConstants.MSG_NAME_DUPLICATED, request.getName()));
+        // 非阻塞加锁，防止并发或连击
+        String lockKey = DistributedLockConstants.LOCK_KEY_PIPELINE_PARAMETER + request.getName();
+        String lockValue = distributedLockService.tryLock(
+                lockKey, DistributedLockConstants.DEFAULT_LOCK_EXPIRE_SECONDS, "修改参数定义");
+        if (lockValue == null) {
+            throw new BusinessException(PipelineParameterConstants.MSG_OPERATION_LOCK_FAILED);
         }
+        try {
+            if (pipelineParameterRepository.countByName(request.getName(), request.getId()) > 0) {
+                throw new BusinessException(String.format(
+                        PipelineParameterConstants.MSG_NAME_DUPLICATED, request.getName()));
+            }
 
-        validateDependParams(request.getDependParams(), request.getId(), request.getName());
+            validateDependParams(request.getDependParams(), request.getId(), request.getName());
 
-        BeanUtils.copyProperties(request, existing);
-        applyDefaults(existing);
-        pipelineParameterRepository.updateById(existing);
-        log.info("更新参数定义成功, name={}, id={}", existing.getName(), existing.getId());
-        return toResponse(pipelineParameterRepository.selectById(existing.getId()));
+            BeanUtils.copyProperties(request, existing);
+            applyDefaults(existing);
+            pipelineParameterRepository.updateById(existing);
+            log.info("更新参数定义成功, name={}, id={}", existing.getName(), existing.getId());
+            return toResponse(pipelineParameterRepository.selectById(existing.getId()));
+        } finally {
+            distributedLockService.unlock(lockKey, lockValue);
+        }
     }
 
     @Override

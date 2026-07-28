@@ -1,18 +1,21 @@
 package com.ci.pipeline.service.service.impl;
 
 import com.ci.pipeline.common.auth.UserContext;
+import com.ci.pipeline.common.constants.DistributedLockConstants;
 import com.ci.pipeline.common.constants.PipelineTemplateConstants;
 import com.ci.pipeline.common.exception.BusinessException;
 import com.ci.pipeline.common.util.SortUtil;
 import com.ci.pipeline.dao.entity.PipelineTemplate;
 import com.ci.pipeline.dao.repository.PipelineTemplateRepository;
 import com.ci.pipeline.dao.repository.PipelineTemplateVersionRepository;
+import com.ci.pipeline.dao.repository.TaskTemplateRepository;
 import com.ci.pipeline.facade.request.PipelineTemplateCreateRequest;
 import com.ci.pipeline.facade.request.PipelineTemplateQueryRequest;
 import com.ci.pipeline.facade.request.PipelineTemplateUpdateRequest;
 import com.ci.pipeline.facade.response.DictDataResponse;
 import com.ci.pipeline.facade.response.PipelineTemplateResponse;
 import com.ci.pipeline.service.service.DictDataService;
+import com.ci.pipeline.service.service.DistributedLockService;
 import com.ci.pipeline.service.service.PipelineTemplateService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -24,6 +27,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -50,6 +54,9 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
         SORT_FIELD_MAP = Collections.unmodifiableMap(m);
     }
 
+    /** 流水线模板编码格式：小写字母，多段用 - 连接 */
+    private static final Pattern CODE_PATTERN = Pattern.compile(PipelineTemplateConstants.CODE_REGEX);
+
     @Autowired
     private PipelineTemplateRepository pipelineTemplateRepository;
 
@@ -57,24 +64,49 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
     private PipelineTemplateVersionRepository pipelineTemplateVersionRepository;
 
     @Autowired
+    private TaskTemplateRepository taskTemplateRepository;
+
+    @Autowired
     private DictDataService dictDataService;
+
+    @Autowired
+    private DistributedLockService distributedLockService;
 
     @Override
     public PipelineTemplateResponse create(PipelineTemplateCreateRequest request) {
         validateRequired(request);
-        // 唯一性校验：pipeline_template_code 在未删除记录中唯一
-        if (pipelineTemplateRepository.countByPipelineTemplateCode(request.getPipelineTemplateCode(), null) > 0) {
-            throw new BusinessException(String.format(
-                    PipelineTemplateConstants.MSG_TEMPLATE_CODE_DUPLICATED, request.getPipelineTemplateCode()));
+        validateCodeFormat(request.getPipelineTemplateCode());
+        // 非阻塞加锁，防止并发或连击
+        String lockKey = DistributedLockConstants.LOCK_KEY_PIPELINE_TEMPLATE + request.getPipelineTemplateCode();
+        String lockValue = distributedLockService.tryLock(
+                lockKey, DistributedLockConstants.DEFAULT_LOCK_EXPIRE_SECONDS, "新增流水线模板");
+        if (lockValue == null) {
+            throw new BusinessException(PipelineTemplateConstants.MSG_OPERATION_LOCK_FAILED);
         }
-        PipelineTemplate entity = new PipelineTemplate();
-        BeanUtils.copyProperties(request, entity);
-        // 创建人取当前登录用户（Controller 已 @RequireLogin，保证非空）
-        entity.setCreator(UserContext.getUserId());
-        pipelineTemplateRepository.insert(entity);
-        log.info("新增流水线模板成功, pipelineTemplateCode={}, id={}",
-                entity.getPipelineTemplateCode(), entity.getId());
-        return toResponse(pipelineTemplateRepository.selectById(entity.getId()));
+        try {
+            // 唯一性校验：pipeline_template_code 在未删除记录中唯一
+            if (pipelineTemplateRepository.countByPipelineTemplateCode(
+                    request.getPipelineTemplateCode(), null) > 0) {
+                throw new BusinessException(String.format(
+                        PipelineTemplateConstants.MSG_TEMPLATE_CODE_DUPLICATED, request.getPipelineTemplateCode()));
+            }
+            // 跨表唯一性校验：流水线模板与任务模板在 argo 侧共享命名空间，编码需全局唯一
+            if (taskTemplateRepository.countByTaskTemplateCode(request.getPipelineTemplateCode(), null) > 0) {
+                throw new BusinessException(String.format(
+                        PipelineTemplateConstants.MSG_TEMPLATE_CODE_CONFLICT_TASK,
+                        request.getPipelineTemplateCode()));
+            }
+            PipelineTemplate entity = new PipelineTemplate();
+            BeanUtils.copyProperties(request, entity);
+            // 创建人取当前登录用户（Controller 已 @RequireLogin，保证非空）
+            entity.setCreator(UserContext.getUserId());
+            pipelineTemplateRepository.insert(entity);
+            log.info("新增流水线模板成功, pipelineTemplateCode={}, id={}",
+                    entity.getPipelineTemplateCode(), entity.getId());
+            return toResponse(pipelineTemplateRepository.selectById(entity.getId()));
+        } finally {
+            distributedLockService.unlock(lockKey, lockValue);
+        }
     }
 
     @Override
@@ -90,20 +122,44 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
         if (request.getPipelineTemplateCode() != null && !StringUtils.hasText(request.getPipelineTemplateCode())) {
             throw new BusinessException(PipelineTemplateConstants.MSG_TEMPLATE_CODE_REQUIRED);
         }
-        // 唯一性校验：排除自身
-        if (request.getPipelineTemplateCode() != null
-                && pipelineTemplateRepository.countByPipelineTemplateCode(
-                        request.getPipelineTemplateCode(), request.getId()) > 0) {
-            throw new BusinessException(String.format(
-                    PipelineTemplateConstants.MSG_TEMPLATE_CODE_DUPLICATED, request.getPipelineTemplateCode()));
+        // 若传入新编码，校验格式
+        if (request.getPipelineTemplateCode() != null) {
+            validateCodeFormat(request.getPipelineTemplateCode());
         }
-        PipelineTemplate entity = new PipelineTemplate();
-        BeanUtils.copyProperties(request, entity);
-        // creator 由系统维护，更新时不允许修改
-        entity.setCreator(null);
-        pipelineTemplateRepository.updateById(entity);
-        log.info("修改流水线模板成功, id={}", request.getId());
-        return toResponse(pipelineTemplateRepository.selectById(request.getId()));
+        // 非阻塞加锁，防止并发或连击（以实际生效的编码为锁粒度）
+        String effectiveCode = request.getPipelineTemplateCode() != null
+                ? request.getPipelineTemplateCode() : existing.getPipelineTemplateCode();
+        String lockKey = DistributedLockConstants.LOCK_KEY_PIPELINE_TEMPLATE + effectiveCode;
+        String lockValue = distributedLockService.tryLock(
+                lockKey, DistributedLockConstants.DEFAULT_LOCK_EXPIRE_SECONDS, "修改流水线模板");
+        if (lockValue == null) {
+            throw new BusinessException(PipelineTemplateConstants.MSG_OPERATION_LOCK_FAILED);
+        }
+        try {
+            // 唯一性校验：排除自身
+            if (request.getPipelineTemplateCode() != null
+                    && pipelineTemplateRepository.countByPipelineTemplateCode(
+                            request.getPipelineTemplateCode(), request.getId()) > 0) {
+                throw new BusinessException(String.format(
+                        PipelineTemplateConstants.MSG_TEMPLATE_CODE_DUPLICATED, request.getPipelineTemplateCode()));
+            }
+            // 跨表唯一性校验（编码变更时）
+            if (request.getPipelineTemplateCode() != null
+                    && taskTemplateRepository.countByTaskTemplateCode(request.getPipelineTemplateCode(), null) > 0) {
+                throw new BusinessException(String.format(
+                        PipelineTemplateConstants.MSG_TEMPLATE_CODE_CONFLICT_TASK,
+                        request.getPipelineTemplateCode()));
+            }
+            PipelineTemplate entity = new PipelineTemplate();
+            BeanUtils.copyProperties(request, entity);
+            // creator 由系统维护，更新时不允许修改
+            entity.setCreator(null);
+            pipelineTemplateRepository.updateById(entity);
+            log.info("修改流水线模板成功, id={}", request.getId());
+            return toResponse(pipelineTemplateRepository.selectById(request.getId()));
+        } finally {
+            distributedLockService.unlock(lockKey, lockValue);
+        }
     }
 
     @Override
@@ -146,6 +202,16 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
     @Override
     public List<DictDataResponse> listGroups() {
         return dictDataService.listByDictType(PipelineTemplateConstants.DICT_TYPE_PIPELINE_TEMPLATE_GROUP);
+    }
+
+    /**
+     * 校验流水线模板编码格式：小写字母，多段用 - 连接
+     */
+    private void validateCodeFormat(String code) {
+        if (!CODE_PATTERN.matcher(code).matches()) {
+            throw new BusinessException(String.format(
+                    PipelineTemplateConstants.MSG_TEMPLATE_CODE_FORMAT_INVALID, code));
+        }
     }
 
     /**
