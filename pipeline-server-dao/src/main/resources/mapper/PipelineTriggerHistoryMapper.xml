@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ci.pipeline.dao.mapper.PipelineTriggerHistoryMapper">
+
+    <resultMap id="BaseResultMap" type="com.ci.pipeline.dao.entity.PipelineTriggerHistory">
+        <id column="id" property="id"/>
+        <result column="app_name" property="appName"/>
+        <result column="pipeline_id" property="pipelineId"/>
+        <result column="pipeline_run_id" property="pipelineRunId"/>
+        <result column="pipeline_event_bind_id" property="pipelineEventBindId"/>
+        <result column="status" property="status"/>
+        <result column="type" property="type"/>
+        <result column="creator" property="creator"/>
+        <result column="request_body" property="requestBody"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="pipeline_template_code" property="pipelineTemplateCode"/>
+        <result column="pipeline_template_version" property="pipelineTemplateVersion"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, app_name, pipeline_id, pipeline_run_id, pipeline_event_bind_id, status, type,
+        creator, request_body, error_message, pipeline_template_code, pipeline_template_version,
+        create_time, update_time, deleted
+    </sql>
+
+    <select id="pageQuery" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM pipeline_trigger_history
+        <where>
+            deleted = 0
+            <if test="pipelineId != null">AND pipeline_id = #{pipelineId}</if>
+            <if test="appName != null and appName != ''">AND app_name = #{appName}</if>
+            <if test="status != null and status != ''">AND status = #{status}</if>
+            <if test="type != null and type != ''">AND type = #{type}</if>
+        </where>
+        ORDER BY id DESC
+    </select>
+</mapper>

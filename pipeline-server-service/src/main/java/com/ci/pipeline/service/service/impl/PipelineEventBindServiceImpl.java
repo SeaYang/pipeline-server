@@ -26,7 +26,7 @@ public class PipelineEventBindServiceImpl implements PipelineEventBindService {
     }
 
     @Override
-    public void create(String appName, String eventType, String pipelineTemplateCode, Long pipelineId) {
+    public PipelineEventBind create(String appName, String eventType, String pipelineTemplateCode, Long pipelineId) {
         PipelineEventBind entity = new PipelineEventBind();
         entity.setAppName(appName);
         entity.setEventType(eventType);
@@ -36,7 +36,8 @@ public class PipelineEventBindServiceImpl implements PipelineEventBindService {
         String creator = UserContext.getUserId();
         entity.setCreator(creator != null ? creator : PipelineEventConstants.EVENT_SYSTEM);
         repository.insert(entity);
-        log.info("创建事件-pipeline绑定成功, appName={}, eventType={}, templateCode={}, pipelineId={}",
-                appName, eventType, pipelineTemplateCode, pipelineId);
+        log.info("创建事件-pipeline绑定成功, appName={}, eventType={}, templateCode={}, pipelineId={}, id={}",
+                appName, eventType, pipelineTemplateCode, pipelineId, entity.getId());
+        return entity;
     }
 }

@@ -1,0 +1,20 @@
+CREATE TABLE `pipeline_trigger_history` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `app_name` varchar(200) NOT NULL COMMENT '应用名称，对应 app_info.app_name',
+  `pipeline_id` bigint NOT NULL COMMENT '流水线id，对应 pipeline.id',
+  `pipeline_run_id` bigint DEFAULT NULL COMMENT '流水线执行记录id，对应 pipeline_run.id；触发失败时为 NULL',
+  `pipeline_event_bind_id` bigint NOT NULL DEFAULT '0' COMMENT '事件绑定记录id，对应 pipeline_event_bind.id；手动触发固定为 0',
+  `status` varchar(30) NOT NULL COMMENT '触发状态：SUCCESS-成功，FAILED-失败',
+  `type` varchar(100) NOT NULL COMMENT '触发类型：手动触发为 user，事件触发为对应的事件类型 eventType',
+  `creator` varchar(45) NOT NULL COMMENT '触发人；手动触发取登录用户，事件触发优先取 operator 参数，无则取 eventType',
+  `request_body` longtext COMMENT '触发请求的请求体（JSON 字符串）',
+  `error_message` text COMMENT '触发失败时的错误信息',
+  `pipeline_template_code` varchar(200) NOT NULL COMMENT '触发的流水线模板编码',
+  `pipeline_template_version` varchar(30) DEFAULT NULL COMMENT '触发的流水线模板版本；触发失败时可能为 NULL',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint(1) NOT NULL DEFAULT '0' COMMENT '逻辑删除：0-未删除，1-已删除',
+  PRIMARY KEY (`id`),
+  KEY `idx_pipeline_id` (`pipeline_id`),
+  KEY `idx_app_name` (`app_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线触发历史记录表';
