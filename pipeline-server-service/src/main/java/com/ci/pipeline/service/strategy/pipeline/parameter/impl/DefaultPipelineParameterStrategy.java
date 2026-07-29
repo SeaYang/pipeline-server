@@ -1,5 +1,8 @@
 package com.ci.pipeline.service.strategy.pipeline.parameter.impl;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
 import com.ci.pipeline.dao.entity.PipelineParameter;
 import com.ci.pipeline.service.strategy.defaultvalue.DefaultValueStrategyManager;
 import com.ci.pipeline.service.strategy.pipeline.parameter.PipelineParameterStrategy;
@@ -7,6 +10,7 @@ import com.ci.pipeline.service.strategy.ParamResolveContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 /**
  * 流水线参数策略默认实现（基类）。
@@ -50,5 +54,38 @@ public class DefaultPipelineParameterStrategy implements PipelineParameterStrate
         String strategyValue = defaultValueStrategyManager.resolve(
                 param.getName(), param.getDefaultValueStrategyConfig(), context);
         return strategyValue != null ? strategyValue : param.getDefaultValue();
+    }
+
+    /**
+     * 默认系统内部处理：值映射转换。
+     * <p>当 {@code needSystemProcess = true} 时，在 {@code optionConfig} 中查找 value 对应的 realValue。
+     * 找不到匹配项或 realValue 为空时，原值返回（不做转换）。
+     */
+    @Override
+    public String systemProcess(PipelineParameter param, String value) {
+        if (value == null) {
+            return null;
+        }
+        if (!Boolean.TRUE.equals(param.getNeedSystemProcess())) {
+            return value;
+        }
+        if (!StringUtils.hasText(param.getOptionConfig())) {
+            return value;
+        }
+        try {
+            JSONArray options = JSON.parseArray(param.getOptionConfig());
+            for (int i = 0; i < options.size(); i++) {
+                JSONObject opt = options.getJSONObject(i);
+                String optValue = opt.getString("value");
+                if (value.equals(optValue)) {
+                    String realValue = opt.getString("realValue");
+                    return StringUtils.hasText(realValue) ? realValue : value;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("值映射转换解析 optionConfig 失败, paramName={}, optionConfig={}",
+                    param.getName(), param.getOptionConfig(), e);
+        }
+        return value;
     }
 }

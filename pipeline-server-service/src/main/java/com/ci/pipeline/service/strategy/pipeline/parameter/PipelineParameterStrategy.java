@@ -28,4 +28,19 @@ public interface PipelineParameterStrategy {
      * @return 计算后的参数值，返回 null 表示无法计算（由调用方决定兜底逻辑）
      */
     String buildParameter(PipelineParameter param, ParamResolveContext context);
+
+    /**
+     * 系统内部处理：对参数值做后置转换（值映射、路径归一化等）。
+     * <p>默认实现（{@code DefaultPipelineParameterStrategy.systemProcess}）处理通用的值映射转换：
+     * 当 {@code needSystemProcess = true} 时，在 {@code optionConfig} 中查找 value 对应的 realValue。
+     * <p>个别参数（如 build-context-path、build-module-path）可重写本方法，
+     * 先通过 {@code super.systemProcess()} 走默认映射，再做自定义处理（如路径归一化）。
+     *
+     * @param param     参数定义实体
+     * @param value     待处理的参数值（映射前）
+     * @return 处理后的参数值
+     */
+    default String systemProcess(PipelineParameter param, String value) {
+        return value;
+    }
 }

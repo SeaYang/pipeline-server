@@ -340,13 +340,17 @@ public class PipelineParameterServiceImpl implements PipelineParameterService {
             resolvedValues.remove(affectedName);
         }
 
-        // 5. 拓扑排序全部参数，逐个重新计算（已有值的跳过，被清除值的重新计算）
+        // 5. 拓扑排序全部参数，逐个重新计算
+        // 对所有参数都执行策略 buildParameter（刷新 optionConfig 等副作用，如 git-branch 重新拉取分支列表），
+        // 但只有值被清除（在 affectedNames 中）的参数才用策略返回值更新 resolvedValues，
+        // 已有值的参数保留原值不变。
         List<PipelineParameter> sortedParams = topologicalSort(allParams);
         for (PipelineParameter param : sortedParams) {
+            String value = resolveParamValue(param, context);
             if (resolvedValues.containsKey(param.getName())) {
+                // 已有值：保留原值，但策略的副作用（如 optionConfig 刷新）已生效
                 continue;
             }
-            String value = resolveParamValue(param, context);
             if (value != null) {
                 resolvedValues.put(param.getName(), value);
             }
