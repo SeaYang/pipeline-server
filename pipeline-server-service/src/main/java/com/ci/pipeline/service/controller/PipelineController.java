@@ -115,6 +115,6 @@ public class PipelineController {
      */
     @PostMapping("/execute")
     public Result<PipelineExecuteResponse> execute(@RequestBody PipelineExecuteRequest request) {
-        return Result.success(pipelineService.execute(request));
+        return Result.success(pipelineService.executeWithHistory(request));
     }
 }

@@ -5,6 +5,7 @@ import com.ci.pipeline.common.auth.UserContext;
 import com.ci.pipeline.common.constants.CommonConstants;
 import com.ci.pipeline.common.constants.PipelineConstants;
 import com.ci.pipeline.common.constants.PipelineParameterConstants;
+import com.ci.pipeline.common.constants.PipelineTriggerHistoryConstants;
 import com.ci.pipeline.common.enums.ParamTypeEnum;
 import com.ci.pipeline.common.exception.BusinessException;
 import com.ci.pipeline.common.util.SortUtil;
@@ -30,9 +31,11 @@ import com.ci.pipeline.service.config.ArgoServerProperties;
 import com.ci.pipeline.service.remote.ArgoWorkflowAgent;
 import com.ci.pipeline.service.service.PipelineRunService;
 import com.ci.pipeline.service.service.PipelineService;
+import com.ci.pipeline.service.service.PipelineTriggerHistoryService;
 import com.ci.pipeline.service.strategy.pipeline.parameter.PipelineParameterStrategyManager;
 import com.ci.pipeline.service.strategy.ParamResolveContext;
 import com.ci.pipeline.service.util.ArgoWorkflowUtil;
+import com.alibaba.fastjson.JSON;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.argoproj.workflow.models.IoArgoprojWorkflowV1alpha1Workflow;
 import lombok.extern.slf4j.Slf4j;
@@ -100,6 +103,9 @@ public class PipelineServiceImpl implements PipelineService {
 
     @Autowired
     private PipelineParameterStrategyManager pipelineParameterStrategyManager;
+
+    @Autowired
+    private PipelineTriggerHistoryService pipelineTriggerHistoryService;
 
     @Override
     public PipelineResponse create(PipelineCreateRequest request) {
@@ -249,6 +255,65 @@ public class PipelineServiceImpl implements PipelineService {
         Long pipelineRunId = pipelineRunService.createRun(
                 pipeline, effective, workflow, finalParameters);
         return new PipelineExecuteResponse(pipelineRunId, workflowName);
+    }
+
+    @Override
+    public PipelineExecuteResponse executeWithHistory(PipelineExecuteRequest request) {
+        Long pipelineRunId = null;
+        String errorMessage = null;
+        Pipeline pipeline = null;
+        PipelineTemplateVersion effective = null;
+        try {
+            // 先查出 pipeline 和模板信息，用于记录触发历史
+            if (request != null && request.getPipelineId() != null) {
+                pipeline = pipelineRepository.selectById(request.getPipelineId());
+                if (pipeline != null) {
+                    effective = pipelineTemplateVersionRepository.selectEffectiveByCode(
+                            pipeline.getPipelineTemplateCode());
+                }
+            }
+            PipelineExecuteResponse response = execute(request);
+            pipelineRunId = response != null ? response.getPipelineRunId() : null;
+            return response;
+        } catch (RuntimeException e) {
+            errorMessage = e.getMessage();
+            throw e;
+        } finally {
+            recordManualTriggerHistory(request, pipeline, effective, pipelineRunId, errorMessage);
+        }
+    }
+
+    /**
+     * 记录手动触发历史
+     */
+    private void recordManualTriggerHistory(PipelineExecuteRequest request, Pipeline pipeline,
+                                            PipelineTemplateVersion effective,
+                                            Long pipelineRunId, String errorMessage) {
+        try {
+            if (pipeline == null) return;
+            String status = pipelineRunId != null
+                    ? PipelineTriggerHistoryConstants.STATUS_SUCCESS
+                    : PipelineTriggerHistoryConstants.STATUS_FAILED;
+            String requestBody = request != null ? JSON.toJSONString(request) : null;
+            String templateCode = pipeline.getPipelineTemplateCode();
+            String templateVersion = effective != null ? effective.getVersion() : null;
+            String creator = UserContext.getUserId();
+
+            pipelineTriggerHistoryService.add(
+                    pipeline.getAppName(),
+                    pipeline.getId(),
+                    pipelineRunId,
+                    PipelineTriggerHistoryConstants.MANUAL_TRIGGER_ID,
+                    status,
+                    PipelineTriggerHistoryConstants.TRIGGER_TYPE_USER,
+                    creator,
+                    requestBody,
+                    errorMessage,
+                    templateCode,
+                    templateVersion);
+        } catch (Exception e) {
+            log.error("记录手动触发历史失败", e);
+        }
     }
 
     // ===== 私有工具方法 =====

@@ -50,4 +50,9 @@ public interface PipelineService {
      * 执行流水线：取生效中版本确认模板已同步，按模板名（= pipelineTemplateCode）拉起 Argo Workflow。
      */
     PipelineExecuteResponse execute(PipelineExecuteRequest request);
+
+    /**
+     * 执行流水线并记录触发历史（手动触发入口）
+     */
+    PipelineExecuteResponse executeWithHistory(PipelineExecuteRequest request);
 }

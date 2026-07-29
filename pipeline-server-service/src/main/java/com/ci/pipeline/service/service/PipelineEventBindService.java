@@ -14,7 +14,7 @@ public interface PipelineEventBindService {
             String appName, String eventType, String pipelineTemplateCode);
 
     /**
-     * 创建绑定记录
+     * 创建绑定记录，返回创建的实体（含 id）
      */
-    void create(String appName, String eventType, String pipelineTemplateCode, Long pipelineId);
+    PipelineEventBind create(String appName, String eventType, String pipelineTemplateCode, Long pipelineId);
 }
