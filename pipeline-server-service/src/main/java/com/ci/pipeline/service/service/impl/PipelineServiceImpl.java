@@ -33,9 +33,6 @@ import com.ci.pipeline.service.service.PipelineService;
 import com.ci.pipeline.service.strategy.pipeline.parameter.PipelineParameterStrategyManager;
 import com.ci.pipeline.service.strategy.ParamResolveContext;
 import com.ci.pipeline.service.util.ArgoWorkflowUtil;
-import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONArray;
-import com.alibaba.fastjson.JSONObject;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.argoproj.workflow.models.IoArgoprojWorkflowV1alpha1Workflow;
 import lombok.extern.slf4j.Slf4j;
@@ -356,23 +353,19 @@ public class PipelineServiceImpl implements PipelineService {
             }
         }
 
-        // 值映射转换 + 校验
+        // 系统内部处理（值映射转换 + 个别参数自定义处理）+ 校验
         for (String paramName : templateParamNames) {
             PipelineParameter paramDef = definedMap.get(paramName);
             String value = finalParameters.get(paramName);
             if (paramDef == null) {
                 continue;
             }
-            // 值映射转换：needSystemProcess = true 时，查 option_config 找 realValue
-            if (Boolean.TRUE.equals(paramDef.getNeedSystemProcess()) && value != null) {
-                String mappedValue = applyValueMapping(paramDef, value);
-                if (mappedValue != null) {
-                    finalParameters.put(paramName, mappedValue);
-                    value = mappedValue;
-                } else {
-                    log.warn("值映射转换失败: 未在 optionConfig 中找到匹配项或 realValue 为空, paramName={}, value={}",
-                            paramName, value);
-                }
+            // 系统处理：走策略类的 systemProcess（默认做值映射转换，个别参数可自定义）
+            if (value != null) {
+                String handledValue = pipelineParameterStrategyManager
+                        .getStrategy(paramName).systemProcess(paramDef, value);
+                finalParameters.put(paramName, handledValue);
+                value = handledValue;
             }
             // required 校验
             if (Boolean.TRUE.equals(paramDef.getRequired()) && (value == null || value.trim().isEmpty())) {
@@ -390,35 +383,6 @@ public class PipelineServiceImpl implements PipelineService {
             }
         }
         return finalParameters;
-    }
-
-    /**
-     * 值映射转换：在 option_config 中找到 value 匹配的选项，返回其 realValue。
-     * <p>如果找不到匹配项或 realValue 为空，返回 null（不做转换）。
-     *
-     * @param paramDef 参数定义
-     * @param value    用户选择的值（映射前）
-     * @return 映射后的值，或 null
-     */
-    private String applyValueMapping(PipelineParameter paramDef, String value) {
-        if (!StringUtils.hasText(paramDef.getOptionConfig())) {
-            return null;
-        }
-        try {
-            JSONArray options = JSON.parseArray(paramDef.getOptionConfig());
-            for (int i = 0; i < options.size(); i++) {
-                JSONObject opt = options.getJSONObject(i);
-                String optValue = opt.getString("value");
-                if (value.equals(optValue)) {
-                    String realValue = opt.getString("realValue");
-                    return StringUtils.hasText(realValue) ? realValue : null;
-                }
-            }
-        } catch (Exception e) {
-            log.warn("值映射转换解析 optionConfig 失败, paramName={}, optionConfig={}",
-                    paramDef.getName(), paramDef.getOptionConfig(), e);
-        }
-        return null;
     }
 
     /**
