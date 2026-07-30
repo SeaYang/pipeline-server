@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ci.pipeline.dao.mapper.CronJobMapper">
+
+    <resultMap id="BaseResultMap" type="com.ci.pipeline.dao.entity.CronJob">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="bean_name" property="beanName"/>
+        <result column="method_name" property="methodName"/>
+        <result column="method_params" property="methodParams"/>
+        <result column="cron_expr" property="cronExpr"/>
+        <result column="enabled" property="enabled"/>
+        <result column="misfire_policy" property="misfirePolicy"/>
+        <result column="concurrent" property="concurrent"/>
+        <result column="next_fire_time" property="nextFireTime"/>
+        <result column="last_fire_time" property="lastFireTime"/>
+        <result column="revision" property="revision"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, name, bean_name, method_name, method_params, cron_expr, enabled, misfire_policy,
+        concurrent, next_fire_time, last_fire_time, revision, create_time, update_time, deleted
+    </sql>
+
+    <!-- 原子抢占（CAS）：id + revision + enabled=1 同时满足才更新成功，多实例并发调度安全 -->
+    <update id="claimAndSchedule">
+        UPDATE cron_job
+        SET next_fire_time = #{nextFireTime},
+            last_fire_time  = #{now},
+            revision        = revision + 1
+        WHERE id       = #{id}
+          AND revision  = #{oldRevision}
+          AND enabled   = 1
+          AND deleted   = 0
+    </update>
+
+    <select id="pageQuery" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM cron_job
+        <where>
+            deleted = 0
+            <if test="name != null and name != ''">
+                AND name LIKE CONCAT('%', #{name}, '%')
+            </if>
+            <if test="enabled != null">
+                AND enabled = #{enabled}
+            </if>
+        </where>
+        ORDER BY id DESC
+    </select>
+
+</mapper>

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ci.pipeline.dao.mapper.CronJobLogMapper">
+
+    <resultMap id="BaseResultMap" type="com.ci.pipeline.dao.entity.CronJobLog">
+        <id column="id" property="id"/>
+        <result column="job_id" property="jobId"/>
+        <result column="job_name" property="jobName"/>
+        <result column="bean_name" property="beanName"/>
+        <result column="method_name" property="methodName"/>
+        <result column="method_params" property="methodParams"/>
+        <result column="status" property="status"/>
+        <result column="message" property="message"/>
+        <result column="instance_ip" property="instanceIp"/>
+        <result column="start_time" property="startTime"/>
+        <result column="end_time" property="endTime"/>
+        <result column="cost_ms" property="costMs"/>
+        <result column="create_time" property="createTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, job_id, job_name, bean_name, method_name, method_params, status, message,
+        instance_ip, start_time, end_time, cost_ms, create_time, deleted
+    </sql>
+
+    <!-- CAS 更新：仅当当前仍是 running 时才生效 -->
+    <update id="updateStatusIfRunning">
+        UPDATE cron_job_log
+        SET status   = #{status},
+            message  = #{message},
+            end_time = #{endTime},
+            cost_ms  = #{costMs}
+        WHERE id     = #{id}
+          AND status = 'running'
+          AND deleted = 0
+    </update>
+
+    <select id="countRunning" resultType="long">
+        SELECT COUNT(*)
+        FROM cron_job_log
+        WHERE deleted = 0
+          AND job_id = #{jobId}
+          AND status = 'running'
+        <if test="excludeId != null">
+            AND id &lt;&gt; #{excludeId}
+        </if>
+    </select>
+
+    <select id="pageQuery" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM cron_job_log
+        <where>
+            deleted = 0
+            <if test="jobId != null">
+                AND job_id = #{jobId}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY id DESC
+    </select>
+
+</mapper>
