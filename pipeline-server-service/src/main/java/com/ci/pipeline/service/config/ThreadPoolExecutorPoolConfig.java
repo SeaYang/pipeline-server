@@ -1,11 +1,14 @@
 package com.ci.pipeline.service.config;
 
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.OkHttpClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 线程池配置。
@@ -61,5 +64,53 @@ public class ThreadPoolExecutorPoolConfig {
         executor.initialize();
         log.info("日志 SSE watch 线程池初始化完成, core=10, max=20, queue=50");
         return executor;
+    }
+
+    /**
+     * 定时任务执行线程池。
+     * <p>提交方是单线程的 {@code @Scheduled} 扫描线程（见 {@code CronJobScheduler#scan()}），
+     * 若使用 {@link ThreadPoolExecutor.CallerRunsPolicy}，一旦线程池打满会导致扫描线程被迫
+     * 同步执行任务、阻塞后续扫描，进而影响所有任务的调度；因此改用自定义拒绝策略：
+     * 仅记录告警日志并丢弃本次触发，牺牲个别触发换取调度线程本身的可用性。
+     */
+    @Bean("cronJobExecutor")
+    public ThreadPoolTaskExecutor cronJobExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(10);
+        executor.setMaxPoolSize(30);
+        executor.setQueueCapacity(20);
+        executor.setKeepAliveSeconds(60);
+        executor.setThreadNamePrefix("cron-job-");
+        executor.setRejectedExecutionHandler(new LoggingDiscardPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.setThreadGroupName("cronJobExecutor");
+        executor.initialize();
+        log.info("定时任务执行线程池初始化完成, core=10, max=30, queue=20");
+        return executor;
+    }
+
+    /**
+     * 内部服务间通信 OkHttpClient，供 {@code InternalHttpClient} 跨实例路由"停止任务"请求使用。
+     * 连接超时/读写超时都设置得较短：目标是同机房内部调用，快速失败优于长时间等待。
+     */
+    @Bean("internalOkHttpClient")
+    public OkHttpClient internalOkHttpClient() {
+        return new OkHttpClient.Builder()
+                .connectTimeout(3, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.SECONDS)
+                .writeTimeout(5, TimeUnit.SECONDS)
+                .build();
+    }
+
+    /**
+     * 仅记录日志、丢弃任务的拒绝策略，避免线程池打满时反压到调用方线程（尤其是单线程的调度线程）。
+     */
+    private static class LoggingDiscardPolicy implements RejectedExecutionHandler {
+        @Override
+        public void rejectedExecution(Runnable r, ThreadPoolExecutor executor) {
+            log.warn("定时任务执行线程池已满，本次触发被丢弃: activeCount={}, queueSize={}",
+                    executor.getActiveCount(), executor.getQueue().size());
+        }
     }
 }

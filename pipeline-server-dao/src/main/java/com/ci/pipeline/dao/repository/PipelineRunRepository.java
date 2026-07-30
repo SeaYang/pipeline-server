@@ -1,11 +1,15 @@
 package com.ci.pipeline.dao.repository;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ci.pipeline.dao.entity.PipelineRun;
 import com.ci.pipeline.dao.mapper.PipelineRunMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
+
+import java.util.Date;
+import java.util.List;
 
 /**
  * 流水线执行记录数据访问，封装 Mapper 调用，为 Service 层提供数据访问能力
@@ -55,6 +59,20 @@ public class PipelineRunRepository {
      */
     public PipelineRun selectLatestByPipelineId(Long pipelineId) {
         return pipelineRunMapper.selectLatestByPipelineId(pipelineId);
+    }
+
+    /**
+     * 查询状态为指定值、且更新时间早于给定阈值的执行记录（仅未删除），供兜底同步定时任务扫描中断的执行记录使用
+     *
+     * @param status           执行状态编码（精确匹配）
+     * @param beforeUpdateTime 阈值时间，update_time 早于该时间才返回
+     * @return 命中的执行记录列表，无结果返回空列表
+     */
+    public List<PipelineRun> selectStaleRunning(String status, Date beforeUpdateTime) {
+        return pipelineRunMapper.selectList(
+                new LambdaQueryWrapper<PipelineRun>()
+                        .eq(PipelineRun::getStatus, status)
+                        .le(PipelineRun::getUpdateTime, beforeUpdateTime));
     }
 
     /**

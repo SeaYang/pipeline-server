@@ -37,5 +37,6 @@ CREATE TABLE `pipeline_run` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_pipeline_id` (`pipeline_id`),
-  KEY `idx_app_name` (`app_name`)
+  KEY `idx_app_name` (`app_name`),
+  KEY `idx_status_update_time` (`status`, `update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线执行记录表，对应pipeline的一次具体执行';
