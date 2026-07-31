@@ -24,6 +24,7 @@ import com.ci.pipeline.facade.request.PipelineParameterQueryRequest;
 import com.ci.pipeline.facade.request.PipelineParameterUpdateRequest;
 import com.ci.pipeline.facade.request.PipelineParametersRefreshRequest;
 import com.ci.pipeline.facade.request.PipelineParametersRequest;
+import com.ci.pipeline.facade.response.AppParameterOptionResponse;
 import com.ci.pipeline.facade.response.PageResponse;
 import com.ci.pipeline.facade.response.PipelineParameterResponse;
 import com.ci.pipeline.facade.response.PipelineRunParameterResponse;
@@ -828,5 +829,28 @@ public class PipelineParameterServiceImpl implements PipelineParameterService {
         PipelineParameterResponse response = new PipelineParameterResponse();
         BeanUtils.copyProperties(entity, response);
         return response;
+    }
+
+    @Override
+    public List<AppParameterOptionResponse> listConfigurableParameters() {
+        List<String> componentTypes = Arrays.asList(
+                ComponentTypeEnum.INPUT.getCode(),
+                ComponentTypeEnum.SELECT.getCode(),
+                ComponentTypeEnum.RADIO.getCode(),
+                ComponentTypeEnum.GIT_TREE.getCode());
+        List<PipelineParameter> list = pipelineParameterRepository
+                .listByComponentTypesAndParamType(componentTypes, ParamTypeEnum.USER.getCode());
+        if (list == null || list.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return list.stream().map(p -> {
+            AppParameterOptionResponse resp = new AppParameterOptionResponse();
+            resp.setName(p.getName());
+            resp.setLabel(p.getLabel());
+            resp.setComponentType(p.getComponentType());
+            resp.setParamType(p.getParamType());
+            resp.setOptionConfig(p.getOptionConfig());
+            return resp;
+        }).collect(Collectors.toList());
     }
 }

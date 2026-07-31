@@ -8,6 +8,7 @@ import com.ci.pipeline.common.result.Result;
 import com.ci.pipeline.facade.request.PipelineParameterCreateRequest;
 import com.ci.pipeline.facade.request.PipelineParameterQueryRequest;
 import com.ci.pipeline.facade.request.PipelineParameterUpdateRequest;
+import com.ci.pipeline.facade.response.AppParameterOptionResponse;
 import com.ci.pipeline.facade.response.EnumOptionResponse;
 import com.ci.pipeline.facade.response.PageResponse;
 import com.ci.pipeline.facade.response.PipelineParameterResponse;
@@ -65,6 +66,12 @@ public class PipelineParameterController {
     @GetMapping("/list-all")
     public Result<List<PipelineParameterResponse>> listAll() {
         return Result.success(pipelineParameterService.listAllSimple());
+    }
+
+    /** 查询可配置的参数列表（INPUT/SELECT/RADIO/GIT_TREE 类型的 user 参数），用于应用参数配置 */
+    @GetMapping("/configurable-list")
+    public Result<List<AppParameterOptionResponse>> configurableList() {
+        return Result.success(pipelineParameterService.listConfigurableParameters());
     }
 
     /** 参数类型枚举列表 */

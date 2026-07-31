@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -70,5 +71,13 @@ public class AppInfoController {
     @GetMapping("/page")
     public Result<PageResponse<AppInfoResponse>> page(AppInfoQueryRequest query) {
         return Result.success(appInfoService.page(query));
+    }
+
+    /**
+     * 根据应用名称查询应用详情
+     */
+    @GetMapping("/detail")
+    public Result<AppInfoResponse> getByAppName(@RequestParam("appName") String appName) {
+        return Result.success(appInfoService.getByAppName(appName));
     }
 }

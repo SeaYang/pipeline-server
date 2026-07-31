@@ -100,6 +100,28 @@ public class PipelineParameterRepository {
                         .select(PipelineParameter::getName, PipelineParameter::getLabel));
     }
 
+    /**
+     * 查询指定组件类型且 param_type 匹配的参数定义（用于应用参数配置的可选参数列表）。
+     *
+     * @param componentTypes 组件类型集合
+     * @param paramType      参数类型
+     * @return 参数定义列表
+     */
+    public List<PipelineParameter> listByComponentTypesAndParamType(Collection<String> componentTypes, String paramType) {
+        if (componentTypes == null || componentTypes.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return pipelineParameterMapper.selectList(
+                new LambdaQueryWrapper<PipelineParameter>()
+                        .select(PipelineParameter::getName,
+                                PipelineParameter::getLabel,
+                                PipelineParameter::getComponentType,
+                                PipelineParameter::getParamType,
+                                PipelineParameter::getOptionConfig)
+                        .in(PipelineParameter::getComponentType, componentTypes)
+                        .eq(PipelineParameter::getParamType, paramType));
+    }
+
     public int insert(PipelineParameter entity) {
         return pipelineParameterMapper.insert(entity);
     }
