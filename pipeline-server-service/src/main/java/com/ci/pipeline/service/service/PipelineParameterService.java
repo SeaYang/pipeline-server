@@ -5,6 +5,7 @@ import com.ci.pipeline.facade.request.PipelineParameterQueryRequest;
 import com.ci.pipeline.facade.request.PipelineParameterUpdateRequest;
 import com.ci.pipeline.facade.request.PipelineParametersRefreshRequest;
 import com.ci.pipeline.facade.request.PipelineParametersRequest;
+import com.ci.pipeline.facade.response.AppParameterOptionResponse;
 import com.ci.pipeline.facade.response.PageResponse;
 import com.ci.pipeline.facade.response.PipelineParameterResponse;
 import com.ci.pipeline.facade.response.PipelineRunParameterResponse;
@@ -57,4 +58,11 @@ public interface PipelineParameterService {
      * @return 全量 user 参数列表（含重新计算的值和过滤后的选项）
      */
     List<PipelineRunParameterResponse> refreshParameters(PipelineParametersRefreshRequest request);
+
+    /**
+     * 查询可配置的参数列表（component_type 为 INPUT/SELECT/RADIO/GIT_TREE 且 param_type 为 user）。
+     *
+     * @return 可配置参数选项列表
+     */
+    List<AppParameterOptionResponse> listConfigurableParameters();
 }

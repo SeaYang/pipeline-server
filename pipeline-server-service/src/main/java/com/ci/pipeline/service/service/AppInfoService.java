@@ -12,6 +12,14 @@ import com.ci.pipeline.facade.response.PageResponse;
 public interface AppInfoService {
 
     /**
+     * 根据应用名称查询应用详情。
+     *
+     * @param appName 应用名称
+     * @return 应用详情
+     */
+    AppInfoResponse getByAppName(String appName);
+
+    /**
      * 新增应用
      */
     AppInfoResponse create(AppInfoCreateRequest request);

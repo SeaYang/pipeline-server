@@ -177,4 +177,13 @@ public class AppInfoServiceImpl implements AppInfoService {
         BeanUtils.copyProperties(entity, response);
         return response;
     }
+
+    @Override
+    public AppInfoResponse getByAppName(String appName) {
+        AppInfo entity = appInfoRepository.selectByAppName(appName);
+        if (entity == null) {
+            throw new BusinessException(AppInfoConstants.MSG_APP_NOT_EXIST);
+        }
+        return toResponse(entity);
+    }
 }
