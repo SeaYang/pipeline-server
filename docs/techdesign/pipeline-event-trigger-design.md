@@ -50,7 +50,7 @@
 │    └── 调用 PipelineService.execute 执行                   │
 ├──────────────────────────────────────────────────────────┤
 │  数据层                                                   │
-│    dict_data（事件类型枚举，dict_type = pipeline_event_type）│
+│    dict_data（事件类型枚举，dict_type = pipeline-event-type）│
 │    pipeline_template_event_bind（事件-模板绑定）             │
 │    pipeline_event_bind（事件-pipeline绑定）                 │
 └──────────────────────────────────────────────────────────┘
@@ -103,25 +103,25 @@ flowchart TD
 
 ### 3.1 事件类型（复用已有字典表）
 
-事件类型使用已有的 `dict_data` 表管理，`dict_type` 固定为 `pipeline_event_type`。
+事件类型使用已有的 `dict_data` 表管理，`dict_type` 固定为 `pipeline-event-type`。
 
 **初始化数据示例：**
 
 ```sql
 -- 先确保字典类型存在
 INSERT INTO dict_type (dict_type, dict_name, remark) 
-VALUES ('pipeline_event_type', '流水线触发事件类型', '定义所有支持的触发事件编码');
+VALUES ('pipeline-event-type', '流水线触发事件类型', '定义所有支持的触发事件编码');
 
 -- 事件类型数据
 INSERT INTO dict_data (dict_type, dict_key, dict_value, dict_sort, remark, enabled) 
-VALUES ('pipeline_event_type', 'epTestApply', '效能平台提测', 1, '效能平台提测事件', 1);
+VALUES ('pipeline-event-type', 'epTestApply', '效能平台提测', 1, '效能平台提测事件', 1);
 ```
 
 **字段说明：**
 
 | 字段 | 说明 | 示例 |
 |------|------|------|
-| `dict_type` | 固定值 `pipeline_event_type` | `pipeline_event_type` |
+| `dict_type` | 固定值 `pipeline-event-type` | `pipeline-event-type` |
 | `dict_key` | 事件编码（唯一标识，策略路由 key） | `epTestApply` |
 | `dict_value` | 事件中文名称（展示用） | `效能平台提测` |
 | `dict_sort` | 排序值 | `1` |
@@ -135,7 +135,7 @@ VALUES ('pipeline_event_type', 'epTestApply', '效能平台提测', 1, '效能�
 ```sql
 CREATE TABLE `pipeline_template_event_bind` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `event_type` varchar(100) NOT NULL COMMENT '事件类型，对应字典 pipeline_event_type 的 dict_key',
+  `event_type` varchar(100) NOT NULL COMMENT '事件类型，对应字典 pipeline-event-type 的 dict_key',
   `pipeline_template_code` varchar(200) NOT NULL COMMENT '关联的流水线模板编码，对应 pipeline_template.pipeline_template_code',
   `creator` varchar(45) NOT NULL COMMENT '创建人',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -160,7 +160,7 @@ CREATE TABLE `pipeline_template_event_bind` (
 CREATE TABLE `pipeline_event_bind` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `pipeline_id` bigint NOT NULL COMMENT '关联的 pipeline.id',
-  `event_type` varchar(100) NOT NULL COMMENT '事件类型，对应字典 pipeline_event_type 的 dict_key',
+  `event_type` varchar(100) NOT NULL COMMENT '事件类型，对应字典 pipeline-event-type 的 dict_key',
   `app_name` varchar(200) NOT NULL COMMENT '应用名称，对应 app_info.app_name',
   `pipeline_template_code` varchar(200) NOT NULL COMMENT '流水线模板编码',
   `creator` varchar(45) NOT NULL COMMENT '创建人',
@@ -181,7 +181,7 @@ CREATE TABLE `pipeline_event_bind` (
 ### 3.4 表关系总览
 
 ```
-dict_data (dict_type=pipeline_event_type)
+dict_data (dict_type=pipeline-event-type)
     │ dict_key = event_type
     │
     ▼
@@ -242,7 +242,7 @@ pipeline_run                          ← 执行记录
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `eventType` | String | 是 | 事件类型编码，对应字典 `pipeline_event_type` 的 `dict_key` |
+| `eventType` | String | 是 | 事件类型编码，对应字典 `pipeline-event-type` 的 `dict_key` |
 | `paramList` | List\<Map\<String, String\>\> | 是 | 参数列表，每个元素对应一个应用的触发参数。不同事件要求的参数 key 不同，由策略类定义 |
 
 **出参** `Result<Object>`（具体类型由策略实现决定，`EpTestApplyStrategy` 返回 `PipelineEventTriggerResponse`）：
@@ -313,7 +313,7 @@ pipeline_run                          ← 执行记录
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `eventType` | String | 是 | 事件类型（需存在于字典 `pipeline_event_type` 且 enabled=1） |
+| `eventType` | String | 是 | 事件类型（需存在于字典 `pipeline-event-type` 且 enabled=1） |
 | `pipelineTemplateCode` | String | 是 | 流水线模板编码（需存在于 `pipeline_template` 表） |
 
 **分页查询入参** `PipelineTemplateEventBindQueryRequest`：
@@ -395,7 +395,7 @@ import com.ci.pipeline.facade.response.PipelineEventTriggerResponse;
 public interface PipelineEventStrategy {
 
     /**
-     * 事件类型编码（对应字典 pipeline_event_type 的 dict_key）
+     * 事件类型编码（对应字典 pipeline-event-type 的 dict_key）
      */
     String eventType();
 
@@ -804,7 +804,7 @@ public class PipelineEventTriggerRequest implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 事件类型编码（对应字典 pipeline_event_type 的 dict_key）
+     * 事件类型编码（对应字典 pipeline-event-type 的 dict_key）
      */
     private String eventType;
 
@@ -900,7 +900,7 @@ public class PipelineTemplateEventBindCreateRequest implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 事件类型（需存在于字典 pipeline_event_type 且 enabled=1）
+     * 事件类型（需存在于字典 pipeline-event-type 且 enabled=1）
      */
     private String eventType;
 
@@ -930,7 +930,7 @@ public class PipelineTemplateEventBindUpdateRequest implements Serializable {
     private Long id;
 
     /**
-     * 事件类型（需存在于字典 pipeline_event_type 且 enabled=1）
+     * 事件类型（需存在于字典 pipeline-event-type 且 enabled=1）
      */
     private String eventType;
 
@@ -997,7 +997,7 @@ public class PipelineTemplateEventBind implements Serializable {
     private Long id;
 
     /**
-     * 事件类型，对应字典 pipeline_event_type 的 dict_key
+     * 事件类型，对应字典 pipeline-event-type 的 dict_key
      */
     private String eventType;
 
@@ -1207,7 +1207,7 @@ public interface PipelineTemplateEventBindService {
 
 **创建校验逻辑：**
 
-1. `eventType` 必须存在于字典表 `dict_data`（`dict_type = pipeline_event_type`，`enabled = 1`），否则抛异常。
+1. `eventType` 必须存在于字典表 `dict_data`（`dict_type = pipeline-event-type`，`enabled = 1`），否则抛异常。
 2. `pipelineTemplateCode` 必须存在于 `pipeline_template` 表（未删除），否则抛异常。
 3. 同一 `eventType + pipelineTemplateCode` 组合在未删除记录中不能重复（应用层先查再插）。
 
@@ -1247,7 +1247,7 @@ public interface PipelineEventBindService {
 
 ```
 后台配置
-├── 触发事件枚举      ← 新增（复用字典表 CRUD，dict_type 固定为 pipeline_event_type）
+├── 触发事件枚举      ← 新增（复用字典表 CRUD，dict_type 固定为 pipeline-event-type）
 └── 模板事件配置      ← 新增（pipeline_template_event_bind CRUD）
 ```
 
@@ -1256,9 +1256,9 @@ public interface PipelineEventBindService {
 **功能**：管理事件类型，底层走字典表接口。
 
 **交互**：
-- 列表展示 `dict_type = pipeline_event_type` 的字典数据。
+- 列表展示 `dict_type = pipeline-event-type` 的字典数据。
 - 新建/编辑表单字段：事件编码（`dict_key`）、事件名称（`dict_value`）、排序（`dict_sort`）、备注（`remark`）、是否启用（`enabled`）。
-- `dict_type` 字段对用户不可见，固定传 `pipeline_event_type`。
+- `dict_type` 字段对用户不可见，固定传 `pipeline-event-type`。
 - 可复用现有字典数据管理页面组件，传入固定的 `dictType` 参数即可。
 
 ### 9.3 模板事件配置页面
@@ -1270,7 +1270,7 @@ public interface PipelineEventBindService {
 - 支持按事件类型筛选。
 
 **新建/编辑表单**：
-- 事件类型：下拉选择（数据来源：`dict_data`，`dict_type = pipeline_event_type`，`enabled = 1`）。下拉项同时展示编码和名称，格式如 `epTestApply（效能平台提测）`，值为 `dict_key`。
+- 事件类型：下拉选择（数据来源：`dict_data`，`dict_type = pipeline-event-type`，`enabled = 1`）。下拉项同时展示编码和名称，格式如 `epTestApply（效能平台提测）`，值为 `dict_key`。
 - 流水线模板：下拉选择（数据来源：`pipeline_template` 表）。下拉项同时展示编码和名称，格式如 `go-build-template（Go 构建模板）`，值为 `pipeline_template_code`。
 
 ---
@@ -1342,7 +1342,7 @@ repository.create(...);
 |------|------|
 | `sql/pipeline_template_event_bind.sql` | 事件-模板绑定表 DDL |
 | `sql/pipeline_event_bind.sql` | 事件-pipeline绑定表 DDL |
-| 字典初始化 SQL | `dict_type` 插入 `pipeline_event_type`，`dict_data` 插入 `epTestApply` |
+| 字典初始化 SQL | `dict_type` 插入 `pipeline-event-type`，`dict_data` 插入 `epTestApply` |
 
 ### 11.2 DAO 层（4 个文件 × 2 个实体 = 8 个文件）
 
@@ -1387,7 +1387,7 @@ repository.create(...);
 
 | 页面 | 功能 |
 |------|------|
-| 触发事件枚举 | 字典表 CRUD（`dict_type = pipeline_event_type`） |
+| 触发事件枚举 | 字典表 CRUD（`dict_type = pipeline-event-type`） |
 | 模板事件配置 | `pipeline_template_event_bind` CRUD |
 
 ---

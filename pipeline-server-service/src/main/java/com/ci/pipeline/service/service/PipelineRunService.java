@@ -20,14 +20,15 @@ public interface PipelineRunService {
     /**
      * 执行流水线后落地执行记录：写入 pipeline_run + 首条执行详情快照，并触发异步状态同步。
      *
-     * @param pipeline   流水线实例
-     * @param effective  生效中的模板版本（提供执行时的 version）
-     * @param workflow   Argo 返回的 Workflow 对象（取 name 与首条快照 detail）
-     * @param parameters 执行入参（key=参数名，value=参数值），序列化为 JSON 存入 arguments
+     * @param pipeline    流水线实例
+     * @param effective   生效中的模板版本（提供执行时的 version）
+     * @param workflow    Argo 返回的 Workflow 对象（取 name 与首条快照 detail）
+     * @param parameters  执行入参（key=参数名，value=参数值），序列化为 JSON 存入 arguments
+     * @param clusterName 执行集群标识（提交时选定的集群，日志/同步/重试/停止按此路由）
      * @return 新落地的执行记录 id
      */
     Long createRun(Pipeline pipeline, PipelineTemplateVersion effective,
-                   IoArgoprojWorkflowV1alpha1Workflow workflow, Map<String, String> parameters);
+                   IoArgoprojWorkflowV1alpha1Workflow workflow, Map<String, String> parameters, String clusterName);
 
     /**
      * 根据主键查询执行记录

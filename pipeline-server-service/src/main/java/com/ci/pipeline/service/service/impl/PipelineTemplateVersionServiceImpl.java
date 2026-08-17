@@ -14,8 +14,7 @@ import com.ci.pipeline.facade.request.PipelineTemplateVersionStatusRequest;
 import com.ci.pipeline.facade.request.PipelineTemplateVersionUpdateRequest;
 import com.ci.pipeline.facade.response.PipelineTemplateVersionResponse;
 import com.ci.pipeline.facade.response.PipelineTemplateVersionSaveResponse;
-import com.ci.pipeline.service.config.ArgoServerProperties;
-import com.ci.pipeline.service.remote.ArgoWorkflowAgent;
+import com.ci.pipeline.service.service.ClusterTemplateSyncService;
 import com.ci.pipeline.service.service.DistributedLockService;
 import com.ci.pipeline.service.service.PipelineTemplateVersionService;
 import com.ci.pipeline.service.util.ArgoWorkflowUtil;
@@ -60,10 +59,7 @@ public class PipelineTemplateVersionServiceImpl implements PipelineTemplateVersi
     private ObjectMapper objectMapper;
 
     @Autowired
-    private ArgoWorkflowAgent argoWorkflowAgent;
-
-    @Autowired
-    private ArgoServerProperties argoServerProperties;
+    private ClusterTemplateSyncService clusterTemplateSyncService;
 
     @Autowired
     private PipelineParameterRepository pipelineParameterRepository;
@@ -185,10 +181,19 @@ public class PipelineTemplateVersionServiceImpl implements PipelineTemplateVersi
         if (existing == null) {
             throw new BusinessException(PipelineTemplateConstants.MSG_VERSION_NOT_EXIST);
         }
-        // 落库前先打通 argo：按名称删除对应的 WorkflowTemplate
+        // 落库前先打通 argo：按名称删除所有 enabled 集群上对应的 WorkflowTemplate
         IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate = parseWorkflowTemplate(existing.getTemplateDetail());
         String templateName = getWorkflowTemplateName(workflowTemplate);
-        argoWorkflowAgent.deleteWorkflowTemplate(argoServerProperties.getNamespace(), templateName);
+        List<com.ci.pipeline.facade.response.ClusterSyncResultResponse> deleteResults =
+                clusterTemplateSyncService.deleteTemplateFromAllClusters(existing.getPipelineTemplateCode(), templateName);
+        List<String> failures = deleteResults.stream()
+                .filter(r -> !Boolean.TRUE.equals(r.getSuccess()))
+                .map(r -> r.getClusterName() + ": " + r.getErrorMessage())
+                .collect(java.util.stream.Collectors.toList());
+        if (!failures.isEmpty()) {
+            throw new BusinessException(String.format(
+                    "部分集群删除模板失败，本次未删除记录，请处理后重试: %s", String.join("; ", failures)));
+        }
         pipelineTemplateVersionRepository.deleteById(id);
         log.info("删除流水线模板版本成功, id={}, pipelineTemplateCode={}, version={}",
                 id, existing.getPipelineTemplateCode(), existing.getVersion());
@@ -252,13 +257,25 @@ public class PipelineTemplateVersionServiceImpl implements PipelineTemplateVersi
                 return toResponse(existing);
             }
 
-            // 发布（目标为生效中）：落库前先打通 argo——不存在则创建，存在则更新；
+            // 发布（目标为生效中）：落库前先打通 argo——不存在则创建，存在则更新（所有 enabled 集群）；
             // 并校验模板详情 metadata.name 与流水线模板编码一致
             if (PipelineTemplateVersionStatusEnum.EFFECTIVE.getCode().equals(request.getStatus())) {
                 IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate =
                         parseWorkflowTemplate(existing.getTemplateDetail());
                 validateTemplateNameMatchCode(workflowTemplate, request.getPipelineTemplateCode());
-                argoWorkflowAgent.saveWorkflowTemplate(argoServerProperties.getNamespace(), workflowTemplate);
+                List<com.ci.pipeline.facade.response.ClusterSyncResultResponse> syncResults =
+                        clusterTemplateSyncService.saveTemplateToAllClusters(
+                                request.getPipelineTemplateCode(), existing.getTemplateDetail());
+                List<String> failures = syncResults.stream()
+                        .filter(r -> !Boolean.TRUE.equals(r.getSuccess()))
+                        .map(r -> r.getClusterName() + ": " + r.getErrorMessage())
+                        .collect(java.util.stream.Collectors.toList());
+                if (!failures.isEmpty()) {
+                    // 部分集群失败：DB 状态照常变更（多数集群已成功，回滚反而造成更大不一致），
+                    // 日志记录失败明细，可通过模板重推接口补偿
+                    log.warn("流水线模板发布部分集群同步失败, pipelineTemplateCode={}, failures={}",
+                            request.getPipelineTemplateCode(), failures);
+                }
             }
 
             // 目标为生效中时，其它尚未失效的版本（生效中 / 草稿）统一自动置为已失效

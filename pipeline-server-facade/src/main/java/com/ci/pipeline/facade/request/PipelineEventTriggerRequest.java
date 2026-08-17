@@ -15,7 +15,7 @@ public class PipelineEventTriggerRequest implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 事件类型编码（对应字典 pipeline_event_type 的 dict_key）
+     * 事件类型编码（对应字典 pipeline-event-type 的 dict_key）
      */
     private String eventType;
 

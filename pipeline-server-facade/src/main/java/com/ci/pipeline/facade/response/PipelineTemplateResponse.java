@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 流水线模板响应
@@ -37,6 +38,16 @@ public class PipelineTemplateResponse implements Serializable {
      * 流水线模板所属分组
      */
     private String pipelineTemplateGroup;
+
+    /**
+     * 候选执行集群（空列表表示不限制集群）
+     */
+    private List<String> clusterNames;
+
+    /**
+     * 集群调度策略：Any-任意集群 / PreferSelected-优先选中集群
+     */
+    private String clusterSchedulePolicy;
 
     /**
      * 创建人

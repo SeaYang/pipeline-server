@@ -27,7 +27,8 @@ import com.ci.pipeline.facade.response.PageResponse;
 import com.ci.pipeline.facade.response.PipelineExecuteResponse;
 import com.ci.pipeline.facade.response.PipelineResponse;
 import com.ci.pipeline.facade.response.PipelineTemplateOptionResponse;
-import com.ci.pipeline.service.config.ArgoServerProperties;
+import com.ci.pipeline.service.scheduler.cluster.ClusterScheduleStrategyManager;
+import com.ci.pipeline.service.service.ClusterConfigService;
 import com.ci.pipeline.service.remote.ArgoWorkflowAgent;
 import com.ci.pipeline.service.service.PipelineRunService;
 import com.ci.pipeline.service.service.PipelineService;
@@ -93,7 +94,10 @@ public class PipelineServiceImpl implements PipelineService {
     private ArgoWorkflowAgent argoWorkflowAgent;
 
     @Autowired
-    private ArgoServerProperties argoServerProperties;
+    private ClusterConfigService clusterConfigService;
+
+    @Autowired
+    private ClusterScheduleStrategyManager clusterScheduleStrategyManager;
 
     @Autowired
     private PipelineRunService pipelineRunService;
@@ -239,21 +243,28 @@ public class PipelineServiceImpl implements PipelineService {
         // 3. required + regex 校验
         Map<String, String> finalParameters = buildAndValidateParameters(pipeline, effective, request.getParameters());
         List<String> paramList = toArgoParameters(finalParameters);
+        // ★ 多集群调度：按模板的调度策略 + 实时打分选择执行集群
+        PipelineTemplate template = pipelineTemplateRepository.selectByPipelineTemplateCode(pipeline.getPipelineTemplateCode());
+        String clusterName = clusterScheduleStrategyManager
+                .getStrategy(template != null ? template.getClusterSchedulePolicy() : null)
+                .selectCluster(template);
         // 模板名 = pipelineTemplateCode（版本生效时已强制 metadata.name 与编码一致）
         IoArgoprojWorkflowV1alpha1Workflow workflow;
         try {
             workflow = argoWorkflowAgent.submitWorkflowByTemplate(
-                    argoServerProperties.getNamespace(), pipeline.getPipelineTemplateCode(), paramList);
+                    clusterName, clusterConfigService.getNamespace(clusterName),
+                    pipeline.getPipelineTemplateCode(), paramList);
         } catch (RuntimeException e) {
-            log.error("执行流水线失败, pipelineId={}, pipelineTemplateCode={}",
-                    pipeline.getId(), pipeline.getPipelineTemplateCode(), e);
+            log.error("执行流水线失败, pipelineId={}, pipelineTemplateCode={}, clusterName={}",
+                    pipeline.getId(), pipeline.getPipelineTemplateCode(), clusterName, e);
             throw new BusinessException(String.format(PipelineConstants.MSG_EXECUTE_FAILED, e.getMessage()));
         }
         String workflowName = workflow.getMetadata() != null ? workflow.getMetadata().getName() : null;
-        log.info("执行流水线成功, pipelineId={}, workflowName={}", pipeline.getId(), workflowName);
-        // 触发 Argo 成功后落地执行记录，并触发异步状态同步；commitId / gitBranch 暂不维护
+        log.info("执行流水线成功, pipelineId={}, workflowName={}, clusterName={}",
+                pipeline.getId(), workflowName, clusterName);
+        // 触发 Argo 成功后落地执行记录（含执行集群），并触发异步状态同步；commitId / gitBranch 暂不维护
         Long pipelineRunId = pipelineRunService.createRun(
-                pipeline, effective, workflow, finalParameters);
+                pipeline, effective, workflow, finalParameters, clusterName);
         return new PipelineExecuteResponse(pipelineRunId, workflowName);
     }
 

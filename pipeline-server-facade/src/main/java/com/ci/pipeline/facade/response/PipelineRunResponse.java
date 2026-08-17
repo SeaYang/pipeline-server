@@ -49,6 +49,11 @@ public class PipelineRunResponse implements Serializable {
     private String status;
 
     /**
+     * 执行集群（pipeline_run.cluster_name，存量为空时由 Service 层兜底解析）
+     */
+    private String clusterName;
+
+    /**
      * 执行时的 git 分支
      */
     private String gitBranch;

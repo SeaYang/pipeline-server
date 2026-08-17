@@ -38,6 +38,15 @@ public class PipelineTemplateVersionRepository {
     }
 
     /**
+     * 查询全部「生效中」的流水线模板版本（新集群接入全量同步用）
+     */
+    public List<PipelineTemplateVersion> listAllEffective() {
+        return pipelineTemplateVersionMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<PipelineTemplateVersion>()
+                        .eq(PipelineTemplateVersion::getStatus, "EFFECTIVE"));
+    }
+
+    /**
      * 统计指定流水线模板编码下的版本记录数（用于删除模板前的占用校验）
      */
     public long countByCode(String pipelineTemplateCode) {

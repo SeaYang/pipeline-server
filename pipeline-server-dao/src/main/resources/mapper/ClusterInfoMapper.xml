@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ci.pipeline.dao.mapper.ClusterInfoMapper">
+
+    <resultMap id="BaseResultMap" type="com.ci.pipeline.dao.entity.ClusterInfo">
+        <id column="id" property="id"/>
+        <result column="cluster_name" property="clusterName"/>
+        <result column="description" property="description"/>
+        <result column="argo_url" property="argoUrl"/>
+        <result column="argo_token" property="argoToken"/>
+        <result column="argo_namespace" property="argoNamespace"/>
+        <result column="k8s_master_url" property="k8sMasterUrl"/>
+        <result column="k8s_token" property="k8sToken"/>
+        <result column="k8s_verifying_ssl" property="k8sVerifyingSsl"/>
+        <result column="connect_timeout_ms" property="connectTimeoutMs"/>
+        <result column="read_timeout_ms" property="readTimeoutMs"/>
+        <result column="free_memory_threshold" property="freeMemoryThreshold"/>
+        <result column="max_running_workflows" property="maxRunningWorkflows"/>
+        <result column="enabled" property="enabled"/>
+        <result column="online" property="online"/>
+        <result column="is_default" property="isDefault"/>
+        <result column="revision" property="revision"/>
+        <result column="creator" property="creator"/>
+        <result column="create_time" property="createTime"/>
+        <result column="updater" property="updater"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+</mapper>

@@ -9,6 +9,7 @@
         <result column="app_name" property="appName"/>
         <result column="pipeline_template_code" property="pipelineTemplateCode"/>
         <result column="pipeline_template_version" property="pipelineTemplateVersion"/>
+        <result column="cluster_name" property="clusterName"/>
         <result column="status" property="status"/>
         <result column="git_branch" property="gitBranch"/>
         <result column="commit_id" property="commitId"/>
@@ -27,7 +28,7 @@
 
     <sql id="Base_Column_List">
         id, pipeline_id, name, app_name, pipeline_template_code, pipeline_template_version,
-        status, git_branch, commit_id, arguments, fail_type, fail_message, duration, revision,
+        cluster_name, status, git_branch, commit_id, arguments, fail_type, fail_message, duration, revision,
         creator, start_time, end_time, create_time, update_time, deleted
     </sql>
 

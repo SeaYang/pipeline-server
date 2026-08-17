@@ -91,6 +91,27 @@ public class ThreadPoolExecutorPoolConfig {
     }
 
     /**
+     * 集群模板同步线程池：模板发布/删除的多集群并行同步 + 新集群接入的全量模板同步。
+     * <p>拒绝策略 CallerRuns：同步退化为调用方线程串行执行，可接受（管理类低频操作）。
+     */
+    @Bean("clusterSyncExecutor")
+    public ThreadPoolTaskExecutor clusterSyncExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(100);
+        executor.setKeepAliveSeconds(60);
+        executor.setThreadNamePrefix("cluster-sync-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.setThreadGroupName("clusterSyncExecutor");
+        executor.initialize();
+        log.info("集群模板同步线程池初始化完成, core=4, max=8, queue=100");
+        return executor;
+    }
+
+    /**
      * 内部服务间通信 OkHttpClient，供 {@code InternalHttpClient} 跨实例路由"停止任务"请求使用。
      * 连接超时/读写超时都设置得较短：目标是同机房内部调用，快速失败优于长时间等待。
      */

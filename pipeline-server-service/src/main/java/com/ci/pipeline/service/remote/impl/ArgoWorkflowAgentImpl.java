@@ -1,7 +1,7 @@
 package com.ci.pipeline.service.remote.impl;
 
-import com.ci.pipeline.service.config.ArgoServerProperties;
 import com.ci.pipeline.service.remote.ArgoWorkflowAgent;
+import com.ci.pipeline.service.remote.ClusterClientRegistry;
 import io.argoproj.workflow.ApiClient;
 import io.argoproj.workflow.ApiException;
 import io.argoproj.workflow.apis.WorkflowServiceApi;
@@ -27,10 +27,9 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Optional;
 
-import javax.annotation.PostConstruct;
-
 /**
- * Argo Workflow 操作实现类
+ * Argo Workflow 操作实现类（多集群版：按 clusterName 从注册表获取对应集群的 ApiClient，
+ * API 对象随用随建，极轻量无性能问题）
  */
 @Slf4j
 @Component
@@ -63,25 +62,29 @@ public class ArgoWorkflowAgentImpl implements ArgoWorkflowAgent {
             "items.spec.suspend");
 
     @Autowired
-    private ApiClient apiClient;
+    private ClusterClientRegistry clusterClientRegistry;
 
-    @Autowired
-    private ArgoServerProperties argoServerProperties;
+    /**
+     * 获取指定集群的 WorkflowTemplate API（随用随建）
+     */
+    private WorkflowTemplateServiceApi templateApi(String clusterName) {
+        ApiClient apiClient = clusterClientRegistry.getArgoApiClient(clusterName);
+        return new WorkflowTemplateServiceApi(apiClient);
+    }
 
-    private WorkflowTemplateServiceApi workflowTemplateServiceApi;
-    private WorkflowServiceApi workflowServiceApi;
-
-    @PostConstruct
-    public void init() {
-        this.workflowTemplateServiceApi = new WorkflowTemplateServiceApi(apiClient);
-        this.workflowServiceApi = new WorkflowServiceApi(apiClient);
-        log.info("ArgoWorkflowAgent 初始化完成, namespace={}", argoServerProperties.getNamespace());
+    /**
+     * 获取指定集群的 Workflow API（随用随建）
+     */
+    private WorkflowServiceApi workflowApi(String clusterName) {
+        ApiClient apiClient = clusterClientRegistry.getArgoApiClient(clusterName);
+        return new WorkflowServiceApi(apiClient);
     }
 
     @Override
-    public IoArgoprojWorkflowV1alpha1WorkflowTemplate lintWorkflowTemplate(String namespace,
+    public IoArgoprojWorkflowV1alpha1WorkflowTemplate lintWorkflowTemplate(String clusterName,
+                                                                            String namespace,
                                                                             IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate) {
-        log.info("Lint WorkflowTemplate, namespace={}", namespace);
+        log.info("Lint WorkflowTemplate, clusterName={}, namespace={}", clusterName, namespace);
         buildDefaultForWorkflowTemplate(workflowTemplate);
         try {
             IoArgoprojWorkflowV1alpha1WorkflowTemplateLintRequest lintRequest =
@@ -90,25 +93,29 @@ public class ArgoWorkflowAgentImpl implements ArgoWorkflowAgent {
             lintRequest.setTemplate(workflowTemplate);
 
             IoArgoprojWorkflowV1alpha1WorkflowTemplate result =
-                    workflowTemplateServiceApi.workflowTemplateServiceLintWorkflowTemplate(namespace, lintRequest);
-            log.info("WorkflowTemplate lint 验证通过, namespace={}, name={}",
-                    namespace, result.getMetadata() != null ? result.getMetadata().getName() : "unknown");
+                    templateApi(clusterName).workflowTemplateServiceLintWorkflowTemplate(namespace, lintRequest);
+            log.info("WorkflowTemplate lint 验证通过, clusterName={}, namespace={}, name={}",
+                    clusterName, namespace, result.getMetadata() != null ? result.getMetadata().getName() : "unknown");
             return result;
         } catch (ApiException e) {
-            log.error("Lint WorkflowTemplate 失败, namespace={}, code={}, body={}",
-                    namespace, e.getCode(), e.getResponseBody(), e);
+            log.error("Lint WorkflowTemplate 失败, clusterName={}, namespace={}, code={}, body={}",
+                    clusterName, namespace, e.getCode(), e.getResponseBody(), e);
             throw new RuntimeException("Lint WorkflowTemplate 失败: " + e.getResponseBody(), e);
         }
     }
 
     @Override
-    public IoArgoprojWorkflowV1alpha1WorkflowTemplate createWorkflowTemplate(String namespace,
+    public IoArgoprojWorkflowV1alpha1WorkflowTemplate createWorkflowTemplate(String clusterName,
+                                                                              String namespace,
                                                                               IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate) {
-        log.info("创建 WorkflowTemplate, namespace={}", namespace);
+        log.info("创建 WorkflowTemplate, clusterName={}, namespace={}", clusterName, namespace);
         buildDefaultForWorkflowTemplate(workflowTemplate);
+        // 创建前清除服务端管理的 metadata 字段：templateDetail 可能来自其他集群的导出/回显 JSON，
+        // 携带 resourceVersion 会报 "resourceVersion should not be set on objects to be created"
+        clearServerManagedMetadata(workflowTemplate);
 
         // 提交前先进行 lint 验证
-        lintWorkflowTemplate(namespace, workflowTemplate);
+        lintWorkflowTemplate(clusterName, namespace, workflowTemplate);
 
         try {
             IoArgoprojWorkflowV1alpha1WorkflowTemplateCreateRequest createRequest =
@@ -117,32 +124,33 @@ public class ArgoWorkflowAgentImpl implements ArgoWorkflowAgent {
             createRequest.setTemplate(workflowTemplate);
 
             IoArgoprojWorkflowV1alpha1WorkflowTemplate result =
-                    workflowTemplateServiceApi.workflowTemplateServiceCreateWorkflowTemplate(namespace, createRequest);
-            log.info("WorkflowTemplate 创建成功, namespace={}, name={}",
-                    namespace, result.getMetadata() != null ? result.getMetadata().getName() : "unknown");
+                    templateApi(clusterName).workflowTemplateServiceCreateWorkflowTemplate(namespace, createRequest);
+            log.info("WorkflowTemplate 创建成功, clusterName={}, namespace={}, name={}",
+                    clusterName, namespace, result.getMetadata() != null ? result.getMetadata().getName() : "unknown");
             return result;
         } catch (ApiException e) {
-            log.error("创建 WorkflowTemplate 失败, namespace={}, code={}, body={}",
-                    namespace, e.getCode(), e.getResponseBody(), e);
+            log.error("创建 WorkflowTemplate 失败, clusterName={}, namespace={}, code={}, body={}",
+                    clusterName, namespace, e.getCode(), e.getResponseBody(), e);
             throw new RuntimeException("创建 WorkflowTemplate 失败: " + e.getResponseBody(), e);
         }
     }
 
     @Override
-    public IoArgoprojWorkflowV1alpha1WorkflowTemplate updateWorkflowTemplate(String namespace,
+    public IoArgoprojWorkflowV1alpha1WorkflowTemplate updateWorkflowTemplate(String clusterName,
+                                                                             String namespace,
                                                                              String name,
                                                                              IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate) {
-        log.info("更新 WorkflowTemplate, namespace={}, name={}", namespace, name);
+        log.info("更新 WorkflowTemplate, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
         buildDefaultForWorkflowTemplate(workflowTemplate);
 
         // 提交前先进行 lint 验证
-        lintWorkflowTemplate(namespace, workflowTemplate);
+        lintWorkflowTemplate(clusterName, namespace, workflowTemplate);
 
         try {
             // argo/K8s 的 Update（PUT）要求 metadata.resourceVersion（乐观锁），
             // 用户传入的模板 JSON 不含该字段（服务端分配），故先查询已存在模板取其 resourceVersion 回填，
             // 否则会报 "metadata.resourceVersion: must be specified for an update"
-            IoArgoprojWorkflowV1alpha1WorkflowTemplate existing = getWorkflowTemplate(namespace, name);
+            IoArgoprojWorkflowV1alpha1WorkflowTemplate existing = getWorkflowTemplate(clusterName, namespace, name);
             V1ObjectMeta meta = workflowTemplate.getMetadata();
             if (meta == null) {
                 meta = new V1ObjectMeta();
@@ -159,32 +167,33 @@ public class ArgoWorkflowAgentImpl implements ArgoWorkflowAgent {
             updateRequest.setTemplate(workflowTemplate);
 
             IoArgoprojWorkflowV1alpha1WorkflowTemplate result =
-                    workflowTemplateServiceApi.workflowTemplateServiceUpdateWorkflowTemplate(namespace, name, updateRequest);
-            log.info("WorkflowTemplate 更新成功, namespace={}, name={}", namespace, name);
+                    templateApi(clusterName).workflowTemplateServiceUpdateWorkflowTemplate(namespace, name, updateRequest);
+            log.info("WorkflowTemplate 更新成功, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
             return result;
         } catch (ApiException e) {
-            log.error("更新 WorkflowTemplate 失败, namespace={}, name={}, code={}, body={}",
-                    namespace, name, e.getCode(), e.getResponseBody(), e);
+            log.error("更新 WorkflowTemplate 失败, clusterName={}, namespace={}, name={}, code={}, body={}",
+                    clusterName, namespace, name, e.getCode(), e.getResponseBody(), e);
             throw new RuntimeException("更新 WorkflowTemplate 失败: " + e.getResponseBody(), e);
         }
     }
 
     @Override
-    public void deleteWorkflowTemplate(String namespace, String name) {
-        log.info("删除 WorkflowTemplate, namespace={}, name={}", namespace, name);
+    public void deleteWorkflowTemplate(String clusterName, String namespace, String name) {
+        log.info("删除 WorkflowTemplate, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
         try {
-            workflowTemplateServiceApi.workflowTemplateServiceDeleteWorkflowTemplate(
+            templateApi(clusterName).workflowTemplateServiceDeleteWorkflowTemplate(
                     namespace, name, null, null, null, null, null, null);
-            log.info("WorkflowTemplate 删除成功, namespace={}, name={}", namespace, name);
+            log.info("WorkflowTemplate 删除成功, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
         } catch (ApiException e) {
-            log.error("删除 WorkflowTemplate 失败, namespace={}, name={}, code={}, body={}",
-                    namespace, name, e.getCode(), e.getResponseBody(), e);
+            log.error("删除 WorkflowTemplate 失败, clusterName={}, namespace={}, name={}, code={}, body={}",
+                    clusterName, namespace, name, e.getCode(), e.getResponseBody(), e);
             throw new RuntimeException("删除 WorkflowTemplate 失败: " + e.getResponseBody(), e);
         }
     }
 
     @Override
-    public IoArgoprojWorkflowV1alpha1WorkflowTemplate saveWorkflowTemplate(String namespace,
+    public IoArgoprojWorkflowV1alpha1WorkflowTemplate saveWorkflowTemplate(String clusterName,
+                                                                            String namespace,
                                                                             IoArgoprojWorkflowV1alpha1WorkflowTemplate workflowTemplate) {
         String name = Optional.ofNullable(workflowTemplate)
                 .map(IoArgoprojWorkflowV1alpha1WorkflowTemplate::getMetadata)
@@ -193,204 +202,211 @@ public class ArgoWorkflowAgentImpl implements ArgoWorkflowAgent {
         if (name == null || name.isEmpty()) {
             throw new RuntimeException("保存 WorkflowTemplate 失败：metadata.name 不能为空");
         }
-        log.info("保存 WorkflowTemplate, namespace={}, name={}", namespace, name);
+        log.info("保存 WorkflowTemplate, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
         // 先查是否已存在：getWorkflowTemplate 在模板不存在时会抛异常，据此判定走更新还是创建
         boolean exists;
         try {
-            getWorkflowTemplate(namespace, name);
+            getWorkflowTemplate(clusterName, namespace, name);
             exists = true;
         } catch (Exception e) {
-            log.info("WorkflowTemplate 不存在，将走创建流程, namespace={}, name={}", namespace, name);
+            log.info("WorkflowTemplate 不存在，将走创建流程, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
             exists = false;
         }
         if (exists) {
-            return updateWorkflowTemplate(namespace, name, workflowTemplate);
+            return updateWorkflowTemplate(clusterName, namespace, name, workflowTemplate);
         }
-        return createWorkflowTemplate(namespace, workflowTemplate);
+        return createWorkflowTemplate(clusterName, namespace, workflowTemplate);
     }
 
     @Override
-    public IoArgoprojWorkflowV1alpha1WorkflowTemplate getWorkflowTemplate(String namespace, String name) {
-        log.info("获取 WorkflowTemplate, namespace={}, name={}", namespace, name);
+    public IoArgoprojWorkflowV1alpha1WorkflowTemplate getWorkflowTemplate(String clusterName, String namespace, String name) {
+        log.info("获取 WorkflowTemplate, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
         try {
             IoArgoprojWorkflowV1alpha1WorkflowTemplate result =
-                    workflowTemplateServiceApi.workflowTemplateServiceGetWorkflowTemplate(namespace, name, null);
-            log.info("获取 WorkflowTemplate 成功, namespace={}, name={}", namespace, name);
+                    templateApi(clusterName).workflowTemplateServiceGetWorkflowTemplate(namespace, name, null);
+            log.info("获取 WorkflowTemplate 成功, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
             return result;
         } catch (ApiException e) {
-            log.error("获取 WorkflowTemplate 失败, namespace={}, name={}, code={}, body={}",
-                    namespace, name, e.getCode(), e.getResponseBody(), e);
+            log.error("获取 WorkflowTemplate 失败, clusterName={}, namespace={}, name={}, code={}, body={}",
+                    clusterName, namespace, name, e.getCode(), e.getResponseBody(), e);
             throw new RuntimeException("获取 WorkflowTemplate 失败: " + e.getResponseBody(), e);
         }
     }
 
     @Override
-    public IoArgoprojWorkflowV1alpha1Workflow submitWorkflow(String namespace,
+    public IoArgoprojWorkflowV1alpha1Workflow submitWorkflow(String clusterName,
+                                                             String namespace,
                                                              IoArgoprojWorkflowV1alpha1Workflow workflow,
                                                              List<String> parameters) {
-        log.info("提交工作流, namespace={}", namespace);
+        log.info("提交工作流, clusterName={}, namespace={}", clusterName, namespace);
         try {
             IoArgoprojWorkflowV1alpha1WorkflowSubmitRequest submitRequest = buildWorkflowSubmitRequest(namespace, workflow, parameters);
 
             IoArgoprojWorkflowV1alpha1Workflow result =
-                    workflowServiceApi.workflowServiceSubmitWorkflow(namespace, submitRequest);
-            log.info("工作流提交成功, namespace={}, workflowName={}",
-                    namespace, result.getMetadata() != null ? result.getMetadata().getName() : "unknown");
+                    workflowApi(clusterName).workflowServiceSubmitWorkflow(namespace, submitRequest);
+            log.info("工作流提交成功, clusterName={}, namespace={}, workflowName={}",
+                    clusterName, namespace, result.getMetadata() != null ? result.getMetadata().getName() : "unknown");
             return result;
         } catch (ApiException e) {
-            log.error("提交工作流失败, namespace={}, code={}, body={}",
-                    namespace, e.getCode(), e.getResponseBody(), e);
+            log.error("提交工作流失败, clusterName={}, namespace={}, code={}, body={}",
+                    clusterName, namespace, e.getCode(), e.getResponseBody(), e);
             throw new RuntimeException("提交工作流失败: " + e.getResponseBody(), e);
         }
     }
 
     @Override
-    public IoArgoprojWorkflowV1alpha1Workflow submitWorkflowByTemplate(String namespace,
+    public IoArgoprojWorkflowV1alpha1Workflow submitWorkflowByTemplate(String clusterName,
+                                                                       String namespace,
                                                                        String templateName,
                                                                        List<String> parameters) {
-        log.info("按 WorkflowTemplate 名称提交工作流, namespace={}, templateName={}", namespace, templateName);
+        log.info("按 WorkflowTemplate 名称提交工作流, clusterName={}, namespace={}, templateName={}",
+                clusterName, namespace, templateName);
         try {
             IoArgoprojWorkflowV1alpha1WorkflowSubmitRequest submitRequest =
                     buildWorkflowSubmitRequestByTemplate(namespace, templateName, parameters);
 
             IoArgoprojWorkflowV1alpha1Workflow result =
-                    workflowServiceApi.workflowServiceSubmitWorkflow(namespace, submitRequest);
-            log.info("工作流提交成功, namespace={}, templateName={}, workflowName={}",
-                    namespace, templateName,
+                    workflowApi(clusterName).workflowServiceSubmitWorkflow(namespace, submitRequest);
+            log.info("工作流提交成功, clusterName={}, namespace={}, templateName={}, workflowName={}",
+                    clusterName, namespace, templateName,
                     result.getMetadata() != null ? result.getMetadata().getName() : "unknown");
             return result;
         } catch (ApiException e) {
-            log.error("按 WorkflowTemplate 名称提交工作流失败, namespace={}, templateName={}, code={}, body={}",
-                    namespace, templateName, e.getCode(), e.getResponseBody(), e);
+            log.error("按 WorkflowTemplate 名称提交工作流失败, clusterName={}, namespace={}, templateName={}, code={}, body={}",
+                    clusterName, namespace, templateName, e.getCode(), e.getResponseBody(), e);
             throw new RuntimeException("提交工作流失败: " + e.getResponseBody(), e);
         }
     }
 
     @Override
-    public IoArgoprojWorkflowV1alpha1Workflow getWorkflow(String namespace, String name) {
-        log.info("获取 Workflow 实例, namespace={}, name={}", namespace, name);
+    public IoArgoprojWorkflowV1alpha1Workflow getWorkflow(String clusterName, String namespace, String name) {
+        log.info("获取 Workflow 实例, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
         try {
             IoArgoprojWorkflowV1alpha1Workflow result =
-                    workflowServiceApi.workflowServiceGetWorkflow(namespace, name, null, null);
-            log.info("获取 Workflow 实例成功, namespace={}, name={}", namespace, name);
+                    workflowApi(clusterName).workflowServiceGetWorkflow(namespace, name, null, null);
+            log.info("获取 Workflow 实例成功, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
             return result;
         } catch (Exception e) {
-            log.error("获取 Workflow 实例失败, namespace={}, name={}",
-                    namespace, name, e);
+            log.error("获取 Workflow 实例失败, clusterName={}, namespace={}, name={}",
+                    clusterName, namespace, name, e);
             throw new RuntimeException("获取 Workflow 实例失败: ", e);
         }
     }
 
     @Override
-    public IoArgoprojWorkflowV1alpha1WorkflowList listWorkflows(String namespace, List<String> phases) {
-        log.info("查询 Workflow 实例列表, namespace={}, phases={}", namespace, phases);
+    public IoArgoprojWorkflowV1alpha1WorkflowList listWorkflows(String clusterName, String namespace, List<String> phases) {
+        log.info("查询 Workflow 实例列表, clusterName={}, namespace={}, phases={}", clusterName, namespace, phases);
         // 固定只列出 go-cicd-pipeline 模板的实例；如传入 phases，再叠加 phase 过滤
-        StringBuilder labelSelector = new StringBuilder(LABEL_TEMPLATE);
-        if (phases != null && !phases.isEmpty()) {
-            labelSelector.append(",workflows.argoproj.io/phase in (")
-                    .append(String.join(",", phases)).append(")");
+        // 注意：LABEL_TEMPLATE 为空时不能以 "," 开头拼接，否则 label selector 解析报错
+        List<String> selectors = new java.util.ArrayList<>();
+        if (LABEL_TEMPLATE != null && !LABEL_TEMPLATE.isEmpty()) {
+            selectors.add(LABEL_TEMPLATE);
         }
+        if (phases != null && !phases.isEmpty()) {
+            selectors.add("workflows.argoproj.io/phase in (" + String.join(",", phases) + ")");
+        }
+        String labelSelector = String.join(",", selectors);
         try {
             // listOptionsLimit（第9参）+ fields（第11参）做服务端裁剪，
             // 避免返回 managedFields / 完整 spec / status.nodes 等大字段
-            IoArgoprojWorkflowV1alpha1WorkflowList result = workflowServiceApi.workflowServiceListWorkflows(
-                    namespace, labelSelector.toString(), null, null, null, null, null, null,
+            IoArgoprojWorkflowV1alpha1WorkflowList result = workflowApi(clusterName).workflowServiceListWorkflows(
+                    namespace, labelSelector, null, null, null, null, null, null,
                     LIST_LIMIT, null, LIST_FIELDS);
             int count = result.getItems() == null ? 0 : result.getItems().size();
-            log.info("查询 Workflow 实例列表成功, namespace={}, count={}", namespace, count);
+            log.info("查询 Workflow 实例列表成功, clusterName={}, namespace={}, count={}", clusterName, namespace, count);
             return result;
         } catch (ApiException e) {
-            log.error("查询 Workflow 实例列表失败, namespace={}, code={}, body={}",
-                    namespace, e.getCode(), e.getResponseBody(), e);
+            log.error("查询 Workflow 实例列表失败, clusterName={}, namespace={}, code={}, body={}",
+                    clusterName, namespace, e.getCode(), e.getResponseBody(), e);
             throw new RuntimeException("查询 Workflow 实例列表失败: " + e.getResponseBody(), e);
         }
     }
 
     @Override
-    public IoArgoprojWorkflowV1alpha1Workflow retryWorkflow(String namespace, String name) {
-        log.info("重试 Workflow, namespace={}, name={}", namespace, name);
+    public IoArgoprojWorkflowV1alpha1Workflow retryWorkflow(String clusterName, String namespace, String name) {
+        log.info("重试 Workflow, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
         try {
             IoArgoprojWorkflowV1alpha1Workflow result =
-                    workflowServiceApi.workflowServiceRetryWorkflow(namespace, name, buildRetryRequest(namespace, name));
-            log.info("重试 Workflow 成功, namespace={}, name={}", namespace, name);
+                    workflowApi(clusterName).workflowServiceRetryWorkflow(namespace, name, buildRetryRequest(namespace, name));
+            log.info("重试 Workflow 成功, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
             return result;
         } catch (ApiException e) {
-            log.error("重试 Workflow 失败, namespace={}, name={}, code={}, body={}",
-                    namespace, name, e.getCode(), e.getResponseBody(), e);
+            log.error("重试 Workflow 失败, clusterName={}, namespace={}, name={}, code={}, body={}",
+                    clusterName, namespace, name, e.getCode(), e.getResponseBody(), e);
             throw new RuntimeException("重试 Workflow 失败: " + e.getResponseBody(), e);
         }
     }
 
     @Override
-    public IoArgoprojWorkflowV1alpha1Workflow stopWorkflow(String namespace, String name) {
-        log.info("停止 Workflow, namespace={}, name={}", namespace, name);
+    public IoArgoprojWorkflowV1alpha1Workflow stopWorkflow(String clusterName, String namespace, String name) {
+        log.info("停止 Workflow, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
         try {
             IoArgoprojWorkflowV1alpha1Workflow result =
-                    workflowServiceApi.workflowServiceStopWorkflow(namespace, name, buildStopRequest(namespace, name));
-            log.info("停止 Workflow 成功, namespace={}, name={}", namespace, name);
+                    workflowApi(clusterName).workflowServiceStopWorkflow(namespace, name, buildStopRequest(namespace, name));
+            log.info("停止 Workflow 成功, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
             return result;
         } catch (ApiException e) {
-            log.error("停止 Workflow 失败, namespace={}, name={}, code={}, body={}",
-                    namespace, name, e.getCode(), e.getResponseBody(), e);
+            log.error("停止 Workflow 失败, clusterName={}, namespace={}, name={}, code={}, body={}",
+                    clusterName, namespace, name, e.getCode(), e.getResponseBody(), e);
             throw new RuntimeException("停止 Workflow 失败: " + e.getResponseBody(), e);
         }
     }
 
     @Override
-    public IoArgoprojWorkflowV1alpha1Workflow terminateWorkflow(String namespace, String name) {
-        log.info("终止 Workflow, namespace={}, name={}", namespace, name);
+    public IoArgoprojWorkflowV1alpha1Workflow terminateWorkflow(String clusterName, String namespace, String name) {
+        log.info("终止 Workflow, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
         try {
-            IoArgoprojWorkflowV1alpha1Workflow result = workflowServiceApi.workflowServiceTerminateWorkflow(
+            IoArgoprojWorkflowV1alpha1Workflow result = workflowApi(clusterName).workflowServiceTerminateWorkflow(
                     namespace, name, buildTerminateRequest(namespace, name));
-            log.info("终止 Workflow 成功, namespace={}, name={}", namespace, name);
+            log.info("终止 Workflow 成功, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
             return result;
         } catch (ApiException e) {
-            log.error("终止 Workflow 失败, namespace={}, name={}, code={}, body={}",
-                    namespace, name, e.getCode(), e.getResponseBody(), e);
+            log.error("终止 Workflow 失败, clusterName={}, namespace={}, name={}, code={}, body={}",
+                    clusterName, namespace, name, e.getCode(), e.getResponseBody(), e);
             throw new RuntimeException("终止 Workflow 失败: " + e.getResponseBody(), e);
         }
     }
 
     @Override
-    public IoArgoprojWorkflowV1alpha1Workflow resumeWorkflow(String namespace, String name) {
-        log.info("恢复 Workflow, namespace={}, name={}", namespace, name);
+    public IoArgoprojWorkflowV1alpha1Workflow resumeWorkflow(String clusterName, String namespace, String name) {
+        log.info("恢复 Workflow, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
         try {
-            IoArgoprojWorkflowV1alpha1Workflow result = workflowServiceApi.workflowServiceResumeWorkflow(
+            IoArgoprojWorkflowV1alpha1Workflow result = workflowApi(clusterName).workflowServiceResumeWorkflow(
                     namespace, name, buildResumeRequest(namespace, name));
-            log.info("恢复 Workflow 成功, namespace={}, name={}", namespace, name);
+            log.info("恢复 Workflow 成功, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
             return result;
         } catch (ApiException e) {
-            log.error("恢复 Workflow 失败, namespace={}, name={}, code={}, body={}",
-                    namespace, name, e.getCode(), e.getResponseBody(), e);
+            log.error("恢复 Workflow 失败, clusterName={}, namespace={}, name={}, code={}, body={}",
+                    clusterName, namespace, name, e.getCode(), e.getResponseBody(), e);
             throw new RuntimeException("恢复 Workflow 失败: " + e.getResponseBody(), e);
         }
     }
 
     @Override
-    public IoArgoprojWorkflowV1alpha1Workflow suspendWorkflow(String namespace, String name) {
-        log.info("暂停 Workflow, namespace={}, name={}", namespace, name);
+    public IoArgoprojWorkflowV1alpha1Workflow suspendWorkflow(String clusterName, String namespace, String name) {
+        log.info("暂停 Workflow, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
         try {
-            IoArgoprojWorkflowV1alpha1Workflow result = workflowServiceApi.workflowServiceSuspendWorkflow(
+            IoArgoprojWorkflowV1alpha1Workflow result = workflowApi(clusterName).workflowServiceSuspendWorkflow(
                     namespace, name, buildSuspendRequest(namespace, name));
-            log.info("暂停 Workflow 成功, namespace={}, name={}", namespace, name);
+            log.info("暂停 Workflow 成功, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
             return result;
         } catch (ApiException e) {
-            log.error("暂停 Workflow 失败, namespace={}, name={}, code={}, body={}",
-                    namespace, name, e.getCode(), e.getResponseBody(), e);
+            log.error("暂停 Workflow 失败, clusterName={}, namespace={}, name={}, code={}, body={}",
+                    clusterName, namespace, name, e.getCode(), e.getResponseBody(), e);
             throw new RuntimeException("暂停 Workflow 失败: " + e.getResponseBody(), e);
         }
     }
 
     @Override
-    public void deleteWorkflow(String namespace, String name) {
-        log.info("删除 Workflow, namespace={}, name={}", namespace, name);
+    public void deleteWorkflow(String clusterName, String namespace, String name) {
+        log.info("删除 Workflow, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
         try {
-            workflowServiceApi.workflowServiceDeleteWorkflow(namespace, name,
+            workflowApi(clusterName).workflowServiceDeleteWorkflow(namespace, name,
                     null, null, null, null, null, null, null);
-            log.info("删除 Workflow 成功, namespace={}, name={}", namespace, name);
+            log.info("删除 Workflow 成功, clusterName={}, namespace={}, name={}", clusterName, namespace, name);
         } catch (ApiException e) {
-            log.error("删除 Workflow 失败, namespace={}, name={}, code={}, body={}",
-                    namespace, name, e.getCode(), e.getResponseBody(), e);
+            log.error("删除 Workflow 失败, clusterName={}, namespace={}, name={}, code={}, body={}",
+                    clusterName, namespace, name, e.getCode(), e.getResponseBody(), e);
             throw new RuntimeException("删除 Workflow 失败: " + e.getResponseBody(), e);
         }
     }
@@ -505,6 +521,20 @@ public class ArgoWorkflowAgentImpl implements ArgoWorkflowAgent {
             return generateName.substring(0, generateName.length() - 1);
         }
         return generateName;
+    }
+
+    /**
+     * 清除服务端管理的 metadata 字段（创建场景）：resourceVersion / uid / creationTimestamp。
+     * 这些字段由服务端分配，跨集群同步/导入的模板 JSON 若携带会导致创建失败或数据错乱。
+     */
+    private void clearServerManagedMetadata(IoArgoprojWorkflowV1alpha1WorkflowTemplate template) {
+        V1ObjectMeta meta = template.getMetadata();
+        if (meta == null) {
+            return;
+        }
+        meta.setResourceVersion(null);
+        meta.setUid(null);
+        meta.setCreationTimestamp(null);
     }
 
     /**

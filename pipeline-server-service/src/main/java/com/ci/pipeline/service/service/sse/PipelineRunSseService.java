@@ -79,6 +79,9 @@ public class PipelineRunSseService {
     private PipelineTemplateRepository pipelineTemplateRepository;
 
     @Autowired
+    private com.ci.pipeline.service.service.ClusterConfigService clusterConfigService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     @Autowired
@@ -219,6 +222,7 @@ public class PipelineRunSseService {
         dto.setAppName(run.getAppName());
         dto.setPipelineTemplateCode(run.getPipelineTemplateCode());
         dto.setCreator(run.getCreator());
+        dto.setClusterName(clusterConfigService.resolveRunClusterName(run));
         dto.setArguments(run.getArguments());
         // 流水线模板名称：只查一个字段
         if (run.getPipelineTemplateCode() != null) {

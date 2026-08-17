@@ -13,7 +13,7 @@ public class PipelineTemplateEventBindCreateRequest implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 事件类型（需存在于字典 pipeline_event_type 且 enabled=1）
+     * 事件类型（需存在于字典 pipeline-event-type 且 enabled=1）
      */
     private String eventType;
 

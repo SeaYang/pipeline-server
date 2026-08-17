@@ -12,7 +12,7 @@
 CREATE TABLE `pipeline_event_bind` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `pipeline_id` bigint NOT NULL COMMENT '关联的 pipeline.id',
-  `event_type` varchar(100) NOT NULL COMMENT '事件类型，对应字典 pipeline_event_type 的 dict_key',
+  `event_type` varchar(100) NOT NULL COMMENT '事件类型，对应字典 pipeline-event-type 的 dict_key',
   `app_name` varchar(200) NOT NULL COMMENT '应用名称，对应 app_info.app_name',
   `pipeline_template_code` varchar(200) NOT NULL COMMENT '流水线模板编码',
   `creator` varchar(45) NOT NULL COMMENT '创建人',

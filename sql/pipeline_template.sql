@@ -22,6 +22,8 @@ CREATE TABLE `pipeline_template` (
   `name` varchar(200) NOT NULL COMMENT '模板名称',
   `description` text COMMENT '模板详细描述',
   `pipeline_template_group` varchar(200) NOT NULL COMMENT '流水线模板所属分组，用于分类管理',
+  `cluster_names` varchar(500) DEFAULT NULL COMMENT '候选执行集群，逗号分隔多个 clusterName；NULL/空 表示不限制集群',
+  `cluster_schedule_policy` varchar(45) NOT NULL DEFAULT 'Any' COMMENT '集群调度策略：Any-任意集群 / PreferSelected-优先选中集群',
   `creator` varchar(45) NOT NULL COMMENT '创建人',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

@@ -44,6 +44,16 @@ public class PipelineTemplate implements Serializable {
     private String pipelineTemplateGroup;
 
     /**
+     * 候选执行集群，逗号分隔多个 clusterName；NULL/空 表示不限制集群
+     */
+    private String clusterNames;
+
+    /**
+     * 集群调度策略：Any-任意集群 / PreferSelected-优先选中集群
+     */
+    private String clusterSchedulePolicy;
+
+    /**
      * 创建人
      */
     private String creator;

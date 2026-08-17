@@ -16,7 +16,7 @@ public final class PipelineEventConstants {
     /**
      * 事件类型字典类型编码
      */
-    public static final String DICT_TYPE_PIPELINE_EVENT_TYPE = "pipeline_event_type";
+    public static final String DICT_TYPE_PIPELINE_EVENT_TYPE = "pipeline-event-type";
 
     // ===== 事件类型编码 =====
 
