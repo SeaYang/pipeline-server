@@ -18,6 +18,7 @@ CREATE TABLE `pipeline_run` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `pipeline_id` bigint NOT NULL COMMENT '流水线id，对应pipeline的id',
   `name` varchar(200) NOT NULL COMMENT '流水线执行名称',
+  `cluster_name` varchar(100) DEFAULT NULL COMMENT '执行集群标识（提交时选定的集群），日志/同步/重试/停止按此路由；存量为空时兜底默认集群',
   `app_name` varchar(200) NOT NULL COMMENT '服务的appName，比如：pipeline-server',
   `pipeline_template_code` varchar(200) NOT NULL COMMENT '流水线模板编码，和pipeline_template的对应',
   `pipeline_template_version` varchar(30) NOT NULL COMMENT '执行流水线时的模板版本，对应pipeline_template_version的version',
@@ -38,5 +39,6 @@ CREATE TABLE `pipeline_run` (
   PRIMARY KEY (`id`),
   KEY `idx_pipeline_id` (`pipeline_id`),
   KEY `idx_app_name` (`app_name`),
+  KEY `idx_cluster_name` (`cluster_name`),
   KEY `idx_status_update_time` (`status`, `update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线执行记录表，对应pipeline的一次具体执行';

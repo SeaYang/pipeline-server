@@ -22,12 +22,13 @@ import com.ci.pipeline.facade.response.PageResponse;
 import com.ci.pipeline.facade.response.PipelineRunExecuteDetailResponse;
 import com.ci.pipeline.facade.response.PipelineRunResponse;
 import com.ci.pipeline.facade.response.PipelineRunSnapshotResponse;
-import com.ci.pipeline.service.config.ArgoServerProperties;
+import com.ci.pipeline.service.service.ClusterConfigService;
 import com.ci.pipeline.service.config.PipelineRunSyncProperties;
 import com.ci.pipeline.service.remote.ArgoWorkflowAgent;
 import com.ci.pipeline.service.service.DistributedLockService;
 import com.ci.pipeline.service.service.PipelineRunService;
 import com.ci.pipeline.service.service.PipelineRunSyncService;
+import org.apache.commons.lang3.StringUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -94,7 +95,7 @@ public class PipelineRunServiceImpl implements PipelineRunService {
     private ArgoWorkflowAgent argoWorkflowAgent;
 
     @Autowired
-    private ArgoServerProperties argoServerProperties;
+    private ClusterConfigService clusterConfigService;
 
     @Autowired
     private PipelineRunSyncProperties pipelineRunSyncProperties;
@@ -111,11 +112,13 @@ public class PipelineRunServiceImpl implements PipelineRunService {
 
     @Override
     public Long createRun(Pipeline pipeline, PipelineTemplateVersion effective,
-                          IoArgoprojWorkflowV1alpha1Workflow workflow, Map<String, String> parameters) {
+                          IoArgoprojWorkflowV1alpha1Workflow workflow, Map<String, String> parameters,
+                          String clusterName) {
         String workflowName = workflowName(workflow);
         PipelineRun run = new PipelineRun();
         run.setPipelineId(pipeline.getId());
         run.setName(workflowName);
+        run.setClusterName(clusterName);
         run.setAppName(pipeline.getAppName());
         run.setPipelineTemplateCode(pipeline.getPipelineTemplateCode());
         run.setPipelineTemplateVersion(effective.getVersion());
@@ -126,7 +129,8 @@ public class PipelineRunServiceImpl implements PipelineRunService {
         Long runId = run.getId();
         // 紧接着插入首条执行详情快照（无需反查 Argo，直接用提交返回的 workflow）
         saveSnapshot(runId, workflow);
-        log.info("流水线执行记录落地成功, pipelineRunId={}, pipelineId={}, name={}", runId, pipeline.getId(), workflowName);
+        log.info("流水线执行记录落地成功, pipelineRunId={}, pipelineId={}, name={}, clusterName={}",
+                runId, pipeline.getId(), workflowName, clusterName);
         // 触发异步状态同步：insert 已自动提交，异步线程可读到该行
         pipelineRunSyncExecutor.execute(() -> pipelineRunSyncService.syncUntilTerminal(runId));
         return runId;
@@ -216,7 +220,7 @@ public class PipelineRunServiceImpl implements PipelineRunService {
             throw new BusinessException(PipelineConstants.MSG_RUN_RETRY_NOT_FAILED);
         }
         // 2) 实时查询 Argo，状态也必须为失败（Failed / Error）
-        String argoPhase = getArgoPhase(run.getName());
+        String argoPhase = getArgoPhase(run);
         PipelineRunStatusEnum argoStatus = PipelineRunStatusEnum.ofCode(argoPhase);
         if (argoStatus == null || !argoStatus.isFailure()) {
             throw new BusinessException(String.format(PipelineConstants.MSG_RUN_ARGO_RETRY_NOT_FAILED, argoPhase));
@@ -229,9 +233,9 @@ public class PipelineRunServiceImpl implements PipelineRunService {
             throw new BusinessException(PipelineConstants.MSG_OPERATION_LOCK_FAILED);
         }
         try {
-            // 3) 调 Argo 重试
+            // 3) 调 Argo 重试（按 run 记录的集群路由）
             try {
-                argoWorkflowAgent.retryWorkflow(argoServerProperties.getNamespace(), run.getName());
+                argoWorkflowAgent.retryWorkflow(clusterConfigService.resolveRunClusterName(run), clusterConfigService.resolveRunNamespace(run), run.getName());
             } catch (RuntimeException e) {
                 log.error("重试流水线失败, pipelineRunId={}, name={}", id, run.getName(), e);
                 throw new BusinessException(String.format(PipelineConstants.MSG_RUN_RETRY_FAILED, e.getMessage()));
@@ -264,7 +268,7 @@ public class PipelineRunServiceImpl implements PipelineRunService {
             throw new BusinessException(PipelineConstants.MSG_RUN_STOP_ALREADY_TERMINAL);
         }
         // 2) 实时查询 Argo phase，若已 Succeeded 则不可停止（成功的不允许取消）
-        String argoPhase = getArgoPhase(run.getName());
+        String argoPhase = getArgoPhase(run);
         if (PipelineRunStatusEnum.SUCCEEDED.getCode().equals(argoPhase)) {
             throw new BusinessException(String.format(PipelineConstants.MSG_RUN_ARGO_STOP_NOT_RUNNING, argoPhase));
         }
@@ -283,7 +287,7 @@ public class PipelineRunServiceImpl implements PipelineRunService {
             PipelineRunStatusEnum argoStatus = PipelineRunStatusEnum.ofCode(argoPhase);
             if (argoStatus == null || !argoStatus.isArgoStable()) {
                 try {
-                    argoWorkflowAgent.terminateWorkflow(argoServerProperties.getNamespace(), run.getName());
+                    argoWorkflowAgent.terminateWorkflow(clusterConfigService.resolveRunClusterName(run), clusterConfigService.resolveRunNamespace(run), run.getName());
                 } catch (RuntimeException e) {
                     log.error("停止流水线失败, pipelineRunId={}, name={}", id, run.getName(), e);
                     throw new BusinessException(String.format(PipelineConstants.MSG_RUN_STOP_FAILED, e.getMessage()));
@@ -343,11 +347,12 @@ public class PipelineRunServiceImpl implements PipelineRunService {
                 run.getPipelineTemplateCode(), run.getPipelineTemplateVersion());
         Map<String, String> taskCodeNameMap = buildTaskCodeNameMap(version);
 
-        // 3) 实时获取 Argo Workflow 详情
+        // 3) 实时获取 Argo Workflow 详情（按 run 记录的集群路由）
         IoArgoprojWorkflowV1alpha1Workflow argoDetail = argoWorkflowAgent.getWorkflow(
-                argoServerProperties.getNamespace(), pipelineRunName);
+                clusterConfigService.resolveRunClusterName(run), clusterConfigService.resolveRunNamespace(run), pipelineRunName);
 
         PipelineRunExecuteDetailResponse response = new PipelineRunExecuteDetailResponse();
+        response.setClusterName(clusterConfigService.resolveRunClusterName(run));
         response.setArgoDetail(argoDetail);
         response.setTaskCodeNameMap(taskCodeNameMap);
         return response;
@@ -419,13 +424,14 @@ public class PipelineRunServiceImpl implements PipelineRunService {
     }
 
     /**
-     * 实时查询 Argo Workflow 的 status.phase
+     * 实时查询 Argo Workflow 的 status.phase（按 run 记录的集群路由）
      */
-    private String getArgoPhase(String name) {
-        if (name == null || name.isEmpty()) {
+    private String getArgoPhase(PipelineRun run) {
+        if (run == null || run.getName() == null || run.getName().isEmpty()) {
             return null;
         }
-        IoArgoprojWorkflowV1alpha1Workflow workflow = argoWorkflowAgent.getWorkflow(argoServerProperties.getNamespace(), name);
+        IoArgoprojWorkflowV1alpha1Workflow workflow = argoWorkflowAgent.getWorkflow(
+                clusterConfigService.resolveRunClusterName(run), clusterConfigService.resolveRunNamespace(run), run.getName());
         IoArgoprojWorkflowV1alpha1WorkflowStatus status = workflow != null ? workflow.getStatus() : null;
         return status != null ? status.getPhase() : null;
     }
@@ -464,6 +470,8 @@ public class PipelineRunServiceImpl implements PipelineRunService {
         }
         PipelineRunResponse response = new PipelineRunResponse();
         BeanUtils.copyProperties(entity, response);
+        // 存量 run 的 cluster_name 可能为空，用兜底集群解析展示
+        response.setClusterName(clusterConfigService.resolveRunClusterName(entity));
         return response;
     }
 }

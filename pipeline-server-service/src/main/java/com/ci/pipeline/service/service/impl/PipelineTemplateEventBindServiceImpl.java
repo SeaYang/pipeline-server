@@ -175,7 +175,7 @@ public class PipelineTemplateEventBindServiceImpl implements PipelineTemplateEve
     }
 
     /**
-     * 校验事件类型在字典 pipeline_event_type 中存在且启用
+     * 校验事件类型在字典 pipeline-event-type 中存在且启用
      */
     private void validateEventTypeInDict(String eventType) {
         DictData dictData = dictDataRepository.selectByTypeAndKey(

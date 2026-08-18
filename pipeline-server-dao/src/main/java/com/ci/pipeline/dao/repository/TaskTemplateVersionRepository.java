@@ -31,6 +31,15 @@ public class TaskTemplateVersionRepository {
     }
 
     /**
+     * 查询全部「生效中」的任务模板版本（新集群接入全量同步用）
+     */
+    public List<TaskTemplateVersion> listAllEffective() {
+        return taskTemplateVersionMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<TaskTemplateVersion>()
+                        .eq(TaskTemplateVersion::getStatus, "EFFECTIVE"));
+    }
+
+    /**
      * 统计指定任务模板编码下的版本记录数（用于删除模板前的占用校验）
      */
     public long countByCode(String taskTemplateCode) {

@@ -7,7 +7,7 @@ import com.ci.pipeline.dao.entity.PipelineTaskRun;
 import com.ci.pipeline.dao.repository.PipelineRunRepository;
 import com.ci.pipeline.dao.repository.PipelineRunSnapshotRepository;
 import com.ci.pipeline.dao.repository.PipelineTaskRunRepository;
-import com.ci.pipeline.service.config.ArgoServerProperties;
+import com.ci.pipeline.service.service.ClusterConfigService;
 import com.ci.pipeline.service.config.PipelineRunSyncProperties;
 import com.ci.pipeline.service.service.hook.PipelineRunStatusContext;
 import com.ci.pipeline.service.service.hook.PipelineRunStatusHook;
@@ -65,7 +65,7 @@ public class PipelineRunSyncServiceImpl implements PipelineRunSyncService {
     private KubernetesAgent kubernetesAgent;
 
     @Autowired
-    private ArgoServerProperties argoServerProperties;
+    private ClusterConfigService clusterConfigService;
 
     @Autowired
     private PipelineRunSyncProperties pipelineRunSyncProperties;
@@ -109,7 +109,7 @@ public class PipelineRunSyncServiceImpl implements PipelineRunSyncService {
                         return;
                     }
                     IoArgoprojWorkflowV1alpha1Workflow workflow = argoWorkflowAgent.getWorkflow(
-                            argoServerProperties.getNamespace(), run.getName());
+                            clusterConfigService.resolveRunClusterName(run), clusterConfigService.resolveRunNamespace(run), run.getName());
                     Long generation = ArgoWorkflowUtil.getGeneration(workflow);
                     log.info("同步轮询 pipelineRunId={}, attempt={}, dbStatus={}, revision={}, argoGeneration={}, lastGeneration={}",
                             pipelineRunId, attempt, run.getStatus(), run.getRevision(), generation, lastGeneration);
@@ -152,7 +152,7 @@ public class PipelineRunSyncServiceImpl implements PipelineRunSyncService {
         try {
             // terminate 是异步操作，调用后 Argo 需要一点时间才把 workflow / 节点状态更新为终态。
             // 此处轮询等待 Argo 侧 phase 稳定（Failed/Error/Succeeded），确保落地时节点状态已更新。
-            IoArgoprojWorkflowV1alpha1Workflow workflow = waitForArgoStable(run.getName());
+            IoArgoprojWorkflowV1alpha1Workflow workflow = waitForArgoStable(run);
             // 刷新快照 + 落地任务节点记录放在同一事务，保证数据一致性
             new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
                 upsertSnapshot(pipelineRunId, workflow);
@@ -172,17 +172,19 @@ public class PipelineRunSyncServiceImpl implements PipelineRunSyncService {
      * <p>terminate 后 Argo 不会立即把 workflow/节点状态更新为终态，直接查会拿到 Running 的节点。
      * 此方法最多等待 {@code maxWaitSeconds}（默认 30s），每 {@code syncIntervalSeconds} 轮询一次。
      *
-     * @param workflowName Argo Workflow 名称
+     * @param run 执行记录（按其记录的集群路由）
      * @return 最终稳定态的 Workflow 对象
      */
-    private IoArgoprojWorkflowV1alpha1Workflow waitForArgoStable(String workflowName) {
+    private IoArgoprojWorkflowV1alpha1Workflow waitForArgoStable(PipelineRun run) {
         long intervalMillis = Math.max(1, pipelineRunSyncProperties.getSyncIntervalSeconds()) * 1000L;
         int maxWaitSeconds = 30;
         long deadline = System.currentTimeMillis() + maxWaitSeconds * 1000L;
-        String namespace = argoServerProperties.getNamespace();
+        String clusterName = clusterConfigService.resolveRunClusterName(run);
+        String namespace = clusterConfigService.resolveRunNamespace(run);
+        String workflowName = run.getName();
         IoArgoprojWorkflowV1alpha1Workflow workflow = null;
         while (System.currentTimeMillis() < deadline) {
-            workflow = argoWorkflowAgent.getWorkflow(namespace, workflowName);
+            workflow = argoWorkflowAgent.getWorkflow(clusterName, namespace, workflowName);
             IoArgoprojWorkflowV1alpha1WorkflowStatus ws = workflow != null ? workflow.getStatus() : null;
             String phase = ws != null ? ws.getPhase() : null;
             PipelineRunStatusEnum status = PipelineRunStatusEnum.ofCode(phase);
@@ -317,11 +319,13 @@ public class PipelineRunSyncServiceImpl implements PipelineRunSyncService {
             log.info("无 Pod 节点，跳过任务节点落地, pipelineRunId={}", pipelineRunId);
             return;
         }
-        String namespace = argoServerProperties.getNamespace();
+        PipelineRun run = pipelineRunRepository.selectById(pipelineRunId);
+        String clusterName = clusterConfigService.resolveRunClusterName(run);
+        String namespace = clusterConfigService.resolveRunNamespace(run);
         pipelineTaskRunRepository.deleteByPipelineRunId(pipelineRunId);
         List<PipelineTaskRun> list = new ArrayList<>(podNodes.size());
         for (IoArgoprojWorkflowV1alpha1NodeStatus node : podNodes) {
-            list.add(buildTaskRun(pipelineRunId, namespace, workflow, node));
+            list.add(buildTaskRun(pipelineRunId, clusterName, namespace, workflow, node));
         }
         pipelineTaskRunRepository.batchInsert(list);
         log.info("任务节点记录落地完成, pipelineRunId={}, count={}", pipelineRunId, list.size());
@@ -330,7 +334,7 @@ public class PipelineRunSyncServiceImpl implements PipelineRunSyncService {
     /**
      * 由单个 Pod 节点构建任务节点记录。
      */
-    private PipelineTaskRun buildTaskRun(Long pipelineRunId, String namespace,
+    private PipelineTaskRun buildTaskRun(Long pipelineRunId, String clusterName, String namespace,
                                          IoArgoprojWorkflowV1alpha1Workflow workflow, IoArgoprojWorkflowV1alpha1NodeStatus node) {
         PipelineTaskRun taskRun = new PipelineTaskRun();
         taskRun.setPipelineRunId(pipelineRunId);
@@ -341,7 +345,7 @@ public class PipelineRunSyncServiceImpl implements PipelineRunSyncService {
         // pod-name-format v2 下 Pod 名 ≠ node.id，需按 {workflowName}-{template}-{suffix} 拼接
         String podName = ArgoWorkflowUtil.getPodName(workflow, node);
         taskRun.setPodName(podName);
-        taskRun.setLogContent(fetchPodLogBestEffort(namespace, podName));
+        taskRun.setLogContent(fetchPodLogBestEffort(clusterName, namespace, podName));
         Instant startedAt = node.getStartedAt();
         Instant finishedAt = node.getFinishedAt();
         if (startedAt != null) {
@@ -358,19 +362,20 @@ public class PipelineRunSyncServiceImpl implements PipelineRunSyncService {
     /**
      * best-effort 拉取 pod 日志（仅取最后 N 行）；失败返回 null，不阻断任务节点落地。
      */
-    private String fetchPodLogBestEffort(String namespace, String podName) {
+    private String fetchPodLogBestEffort(String clusterName, String namespace, String podName) {
         if (!StringUtils.hasText(podName)) {
             return null;
         }
         try {
             // Argo Pod 含 main / wait 多容器，必须指定 container，否则 k8s 报 400（与 DemoController 一致：container=main）
-            return kubernetesAgent.getPodLog(namespace, podName,
+            return kubernetesAgent.getPodLog(clusterName, namespace, podName,
                     PodLogQuery.builder()
                             .container(KubernetesConstants.DEFAULT_LOG_CONTAINER)
                             .tailLines(POD_LOG_TAIL_LINES)
                             .build());
         } catch (Exception e) {
-            log.warn("获取 Pod 日志失败（忽略），namespace={}, podName={}", namespace, podName, e);
+            log.warn("获取 Pod 日志失败（忽略）， clusterName={}, namespace={}, podName={}",
+                    clusterName, namespace, podName, e);
             return null;
         }
     }

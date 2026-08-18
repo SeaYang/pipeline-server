@@ -37,6 +37,15 @@ public class PipelineRunRepository {
     }
 
     /**
+     * 统计指定集群的执行记录数（集群删除前的引用校验用）
+     */
+    public long countByClusterName(String clusterName) {
+        return pipelineRunMapper.selectCount(
+                new LambdaQueryWrapper<PipelineRun>()
+                        .eq(PipelineRun::getClusterName, clusterName));
+    }
+
+    /**
      * 分页查询（支持 pipelineId / appName / status 精确过滤，支持按字段排序，默认按创建时间倒序）
      *
      * @param pageNum    页码（从 1 开始）

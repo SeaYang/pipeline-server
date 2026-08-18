@@ -1,8 +1,10 @@
 package com.ci.pipeline.service.service.impl;
 
 import com.ci.pipeline.common.auth.UserContext;
+import com.ci.pipeline.common.constants.ClusterConstants;
 import com.ci.pipeline.common.constants.DistributedLockConstants;
 import com.ci.pipeline.common.constants.PipelineTemplateConstants;
+import com.ci.pipeline.common.enums.ClusterSchedulePolicyEnum;
 import com.ci.pipeline.common.exception.BusinessException;
 import com.ci.pipeline.common.util.SortUtil;
 import com.ci.pipeline.dao.entity.PipelineTemplate;
@@ -14,6 +16,7 @@ import com.ci.pipeline.facade.request.PipelineTemplateQueryRequest;
 import com.ci.pipeline.facade.request.PipelineTemplateUpdateRequest;
 import com.ci.pipeline.facade.response.DictDataResponse;
 import com.ci.pipeline.facade.response.PipelineTemplateResponse;
+import com.ci.pipeline.service.service.ClusterConfigService;
 import com.ci.pipeline.service.service.DictDataService;
 import com.ci.pipeline.service.service.DistributedLockService;
 import com.ci.pipeline.service.service.PipelineTemplateService;
@@ -70,6 +73,9 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
     private DictDataService dictDataService;
 
     @Autowired
+    private ClusterConfigService clusterConfigService;
+
+    @Autowired
     private DistributedLockService distributedLockService;
 
     @Override
@@ -98,6 +104,8 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
             }
             PipelineTemplate entity = new PipelineTemplate();
             BeanUtils.copyProperties(request, entity);
+            // 多集群调度字段：List → 逗号串；策略校验 + 集群存在性校验
+            applyClusterFields(entity, request.getClusterNames(), request.getClusterSchedulePolicy());
             // 创建人取当前登录用户（Controller 已 @RequireLogin，保证非空）
             entity.setCreator(UserContext.getUserId());
             pipelineTemplateRepository.insert(entity);
@@ -152,6 +160,8 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
             }
             PipelineTemplate entity = new PipelineTemplate();
             BeanUtils.copyProperties(request, entity);
+            // 多集群调度字段：List → 逗号串；策略校验 + 集群存在性校验
+            applyClusterFields(entity, request.getClusterNames(), request.getClusterSchedulePolicy());
             // creator 由系统维护，更新时不允许修改
             entity.setCreator(null);
             pipelineTemplateRepository.updateById(entity);
@@ -235,6 +245,42 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
         }
         PipelineTemplateResponse response = new PipelineTemplateResponse();
         BeanUtils.copyProperties(entity, response);
+        // cluster_names 逗号串 → List
+        response.setClusterNames(clusterConfigService.splitClusterNames(entity.getClusterNames()));
+        response.setClusterSchedulePolicy(entity.getClusterSchedulePolicy());
         return response;
+    }
+
+    /**
+     * 多集群调度字段处理：List → 逗号串存储；策略编码校验；候选集群存在性校验。
+     */
+    private void applyClusterFields(PipelineTemplate entity, java.util.List<String> clusterNames,
+                                    String clusterSchedulePolicy) {
+        // 策略校验（空则用默认 Any）
+        String policy = StringUtils.hasText(clusterSchedulePolicy)
+                ? clusterSchedulePolicy
+                : ClusterConstants.DEFAULT_SCHEDULE_POLICY;
+        if (!ClusterSchedulePolicyEnum.isValidCode(policy)) {
+            throw new BusinessException(String.format("不支持的集群调度策略, clusterSchedulePolicy=%s", policy));
+        }
+        entity.setClusterSchedulePolicy(policy);
+        // 候选集群存在性校验（不要求 enabled——允许先配模板再上线集群）
+        if (clusterNames != null && !clusterNames.isEmpty()) {
+            java.util.Set<String> unknown = clusterNames.stream()
+                    .filter(StringUtils::hasText)
+                    .filter(name -> {
+                        try {
+                            clusterConfigService.getByClusterName(name);
+                            return false;
+                        } catch (Exception e) {
+                            return true;
+                        }
+                    })
+                    .collect(java.util.stream.Collectors.toSet());
+            if (!unknown.isEmpty()) {
+                throw new BusinessException(String.format("候选集群不存在, clusterNames=%s", unknown));
+            }
+        }
+        entity.setClusterNames(clusterConfigService.joinClusterNames(clusterNames));
     }
 }

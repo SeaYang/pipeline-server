@@ -20,6 +20,11 @@ public class PipelineRunExecuteDetailResponse implements Serializable {
     private IoArgoprojWorkflowV1alpha1Workflow argoDetail;
 
     /**
+     * 执行集群（pipeline_run.cluster_name，存量为空时兜底解析）
+     */
+    private String clusterName;
+
+    /**
      * 任务节点编码 → 中文名 映射（task_template_code → name）
      */
     private Map<String, String> taskCodeNameMap;

@@ -18,7 +18,7 @@ public class PipelineTemplateEventBindUpdateRequest implements Serializable {
     private Long id;
 
     /**
-     * 事件类型（需存在于字典 pipeline_event_type 且 enabled=1）
+     * 事件类型（需存在于字典 pipeline-event-type 且 enabled=1）
      */
     private String eventType;
 

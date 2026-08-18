@@ -8,6 +8,8 @@
         <result column="name" property="name"/>
         <result column="description" property="description"/>
         <result column="pipeline_template_group" property="pipelineTemplateGroup"/>
+        <result column="cluster_names" property="clusterNames"/>
+        <result column="cluster_schedule_policy" property="clusterSchedulePolicy"/>
         <result column="creator" property="creator"/>
         <result column="create_time" property="createTime"/>
         <result column="update_time" property="updateTime"/>
@@ -15,7 +17,7 @@
     </resultMap>
 
     <sql id="Base_Column_List">
-        id, pipeline_template_code, name, description, pipeline_template_group, creator, create_time, update_time, deleted
+        id, pipeline_template_code, name, description, pipeline_template_group, cluster_names, cluster_schedule_policy, creator, create_time, update_time, deleted
     </sql>
 
     <!-- 自定义查询不会被 MyBatis-Plus 逻辑删除插件自动追加 deleted 条件，需手动指定 deleted = 0 -->

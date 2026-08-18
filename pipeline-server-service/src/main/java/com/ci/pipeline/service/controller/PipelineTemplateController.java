@@ -5,8 +5,10 @@ import com.ci.pipeline.common.result.Result;
 import com.ci.pipeline.facade.request.PipelineTemplateCreateRequest;
 import com.ci.pipeline.facade.request.PipelineTemplateQueryRequest;
 import com.ci.pipeline.facade.request.PipelineTemplateUpdateRequest;
+import com.ci.pipeline.facade.response.ClusterSyncResultResponse;
 import com.ci.pipeline.facade.response.DictDataResponse;
 import com.ci.pipeline.facade.response.PipelineTemplateResponse;
+import com.ci.pipeline.service.service.ClusterTemplateSyncService;
 import com.ci.pipeline.service.service.PipelineTemplateService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -32,6 +35,9 @@ public class PipelineTemplateController {
 
     @Autowired
     private PipelineTemplateService pipelineTemplateService;
+
+    @Autowired
+    private ClusterTemplateSyncService clusterTemplateSyncService;
 
     /**
      * 新增流水线模板
@@ -80,5 +86,15 @@ public class PipelineTemplateController {
     @GetMapping("/groups")
     public Result<List<DictDataResponse>> groups() {
         return Result.success(pipelineTemplateService.listGroups());
+    }
+
+    /**
+     * 重推流水线模板到集群（clusterName 为空时重推所有 enabled 集群，幂等）
+     */
+    @PostMapping("/sync-clusters")
+    public Result<List<ClusterSyncResultResponse>> syncClusters(
+            @RequestParam("pipelineTemplateCode") String pipelineTemplateCode,
+            @RequestParam(value = "clusterName", required = false) String clusterName) {
+        return Result.success(clusterTemplateSyncService.resyncPipelineTemplate(pipelineTemplateCode, clusterName));
     }
 }

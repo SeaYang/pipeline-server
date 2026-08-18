@@ -7,11 +7,12 @@ import com.ci.pipeline.dao.entity.PipelineTaskRun;
 import com.ci.pipeline.dao.repository.PipelineRunRepository;
 import com.ci.pipeline.dao.repository.PipelineTaskRunRepository;
 import com.ci.pipeline.facade.response.PipelineRunLogDTO;
-import com.ci.pipeline.service.config.ArgoServerProperties;
+import com.ci.pipeline.service.service.ClusterConfigService;
 import com.ci.pipeline.service.remote.KubernetesAgent;
 import com.ci.pipeline.service.remote.PodLogQuery;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -90,7 +91,7 @@ public class PipelineRunLogService {
     private KubernetesAgent kubernetesAgent;
 
     @Autowired
-    private ArgoServerProperties argoServerProperties;
+    private ClusterConfigService clusterConfigService;
 
     @Autowired
     private PipelineRunSseService pipelineRunSseService;
@@ -194,9 +195,10 @@ public class PipelineRunLogService {
                 return;
             }
 
-            // k8s follow=true 流式获取
-            String namespace = argoServerProperties.getNamespace();
-            logStream = kubernetesAgent.streamPodLog(namespace, podName,
+            // k8s follow=true 流式获取（按 run 记录的集群路由）
+            String clusterName = clusterConfigService.resolveRunClusterName(run);
+            String namespace = clusterConfigService.resolveRunNamespace(run);
+            logStream = kubernetesAgent.streamPodLog(clusterName, namespace, podName,
                     KubernetesConstants.DEFAULT_LOG_CONTAINER, POD_LOG_TAIL_LINES);
 
             // 逐行读取 + 批量推送 + 心跳
@@ -290,7 +292,8 @@ public class PipelineRunLogService {
                 log.info("节点尚未产生运行实例，无法获取日志, pipelineRunName={}, taskCode={}", run.getName(), taskCode);
                 return null;
             }
-            return kubernetesAgent.getPodLog(argoServerProperties.getNamespace(), podName,
+            String clusterName = clusterConfigService.resolveRunClusterName(run);
+            return kubernetesAgent.getPodLog(clusterName, clusterConfigService.resolveRunNamespace(run), podName,
                     PodLogQuery.builder()
                             .container(KubernetesConstants.DEFAULT_LOG_CONTAINER)
                             .tailLines(POD_LOG_TAIL_LINES)

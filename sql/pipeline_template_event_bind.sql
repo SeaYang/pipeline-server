@@ -10,7 +10,7 @@
 
 CREATE TABLE `pipeline_template_event_bind` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `event_type` varchar(100) NOT NULL COMMENT '事件类型，对应字典 pipeline_event_type 的 dict_key',
+  `event_type` varchar(100) NOT NULL COMMENT '事件类型，对应字典 pipeline-event-type 的 dict_key',
   `pipeline_template_code` varchar(200) NOT NULL COMMENT '关联的流水线模板编码，对应 pipeline_template.pipeline_template_code',
   `creator` varchar(45) NOT NULL COMMENT '创建人',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,

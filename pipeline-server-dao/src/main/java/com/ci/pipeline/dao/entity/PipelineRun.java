@@ -35,6 +35,11 @@ public class PipelineRun implements Serializable {
     private String name;
 
     /**
+     * 执行集群标识（提交时选定的集群），日志/同步/重试/停止按此路由；存量为空时兜底默认集群
+     */
+    private String clusterName;
+
+    /**
      * 服务的 appName，比如：pipeline-server
      */
     private String appName;

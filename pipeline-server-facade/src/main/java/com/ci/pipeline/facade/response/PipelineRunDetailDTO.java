@@ -52,6 +52,9 @@ public class PipelineRunDetailDTO implements Serializable {
     /** 执行人（pipeline_run.creator） */
     private String creator;
 
+    /** 执行集群（pipeline_run.cluster_name，存量为空时兜底解析） */
+    private String clusterName;
+
     /** 流水线名称（根据 pipelineId 查 pipeline.name，只查一个字段） */
     private String pipelineName;
 

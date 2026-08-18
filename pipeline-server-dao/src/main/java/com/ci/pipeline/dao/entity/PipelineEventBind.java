@@ -28,7 +28,7 @@ public class PipelineEventBind implements Serializable {
     private Long pipelineId;
 
     /**
-     * 事件类型，对应字典 pipeline_event_type 的 dict_key
+     * 事件类型，对应字典 pipeline-event-type 的 dict_key
      */
     private String eventType;
 

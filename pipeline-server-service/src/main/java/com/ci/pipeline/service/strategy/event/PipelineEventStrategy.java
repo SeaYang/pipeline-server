@@ -11,7 +11,7 @@ import com.ci.pipeline.facade.request.PipelineEventTriggerRequest;
 public interface PipelineEventStrategy {
 
     /**
-     * 事件类型编码（对应字典 pipeline_event_type 的 dict_key）
+     * 事件类型编码（对应字典 pipeline-event-type 的 dict_key）
      *
      * @return 事件类型编码
      */
