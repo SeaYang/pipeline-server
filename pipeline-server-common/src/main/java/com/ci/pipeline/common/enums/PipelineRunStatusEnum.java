@@ -110,4 +110,16 @@ public enum PipelineRunStatusEnum {
         }
         return null;
     }
+
+    /**
+     * 状态编码是否已到终态（Succeeded / Cancelled）。
+     * <p>编码无法解析时返回 false（保守认为未终态，交由后续流程处理）。
+     *
+     * @param code 状态编码
+     * @return 终态返回 true
+     */
+    public static boolean isTerminalCode(String code) {
+        PipelineRunStatusEnum status = ofCode(code);
+        return status != null && status.isTerminal();
+    }
 }

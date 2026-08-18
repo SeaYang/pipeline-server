@@ -64,6 +64,14 @@ public interface PipelineRunService {
     PipelineRunResponse stop(Long id);
 
     /**
+     * 并发超限替换停止（ReplaceOldest 策略）：终止指定执行并置 Cancelled，
+     * fail_type = ReplacedByNew，fail_message 说明被新执行替换，便于与用户手动停止区分、审计。
+     *
+     * @param id 执行记录 id
+     */
+    void stopByConcurrencyReplace(Long id);
+
+    /**
      * 查询执行详情快照（结构同前端 go-cicd-workflow.json）；无快照返回 null。
      */
     JsonNode getDetail(Long id);

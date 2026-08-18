@@ -1,6 +1,7 @@
 package com.ci.pipeline.service.controller;
 
 import com.ci.pipeline.common.auth.RequireLogin;
+import com.ci.pipeline.common.enums.OverLimitPolicyEnum;
 import com.ci.pipeline.common.result.Result;
 import com.ci.pipeline.facade.request.PipelineCreateRequest;
 import com.ci.pipeline.facade.request.PipelineExecuteRequest;
@@ -27,7 +28,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 流水线实例控制器
@@ -53,11 +58,27 @@ public class PipelineController {
     }
 
     /**
-     * 修改流水线（目前仅允许修改 name）
+     * 修改流水线（目前允许修改 name / maxRunningLimit / overLimitPolicy）
      */
     @PutMapping
     public Result<PipelineResponse> update(@RequestBody PipelineUpdateRequest request) {
         return Result.success(pipelineService.update(request));
+    }
+
+    /**
+     * 超限策略下拉选项（模板/流水线表单"超限策略"下拉数据源）
+     */
+    @GetMapping("/over-limit-policies")
+    public Result<List<Map<String, String>>> overLimitPolicies() {
+        List<Map<String, String>> policies = Arrays.stream(OverLimitPolicyEnum.values())
+                .map(p -> {
+                    Map<String, String> item = new LinkedHashMap<>();
+                    item.put("code", p.getCode());
+                    item.put("description", p.getDescription());
+                    return item;
+                })
+                .collect(Collectors.toList());
+        return Result.success(policies);
     }
 
     /**

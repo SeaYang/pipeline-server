@@ -7,6 +7,8 @@
         <result column="name" property="name"/>
         <result column="app_name" property="appName"/>
         <result column="pipeline_template_code" property="pipelineTemplateCode"/>
+        <result column="max_running_limit" property="maxRunningLimit"/>
+        <result column="over_limit_policy" property="overLimitPolicy"/>
         <result column="creator" property="creator"/>
         <result column="create_time" property="createTime"/>
         <result column="update_time" property="updateTime"/>
@@ -14,7 +16,7 @@
     </resultMap>
 
     <sql id="Base_Column_List">
-        id, name, app_name, pipeline_template_code, creator, create_time, update_time, deleted
+        id, name, app_name, pipeline_template_code, max_running_limit, over_limit_policy, creator, create_time, update_time, deleted
     </sql>
 
     <!-- 分页由 MyBatis-Plus 分页插件自动改写，这里无需手写 LIMIT -->
