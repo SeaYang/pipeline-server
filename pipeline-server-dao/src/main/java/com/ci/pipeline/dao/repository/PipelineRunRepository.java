@@ -85,6 +85,61 @@ public class PipelineRunRepository {
     }
 
     /**
+     * 统计占用并发额度的执行数（全平台，L1 全局限流用）。
+     * <p>占用额度的状态集合：Pending / Running / Unknown。
+     *
+     * @param statuses 占用额度的状态编码集合
+     */
+    public long countOccupying(List<String> statuses) {
+        return pipelineRunMapper.selectCount(
+                new LambdaQueryWrapper<PipelineRun>()
+                        .in(PipelineRun::getStatus, statuses));
+    }
+
+    /**
+     * 统计占用并发额度的执行数（appName + 模板维度，L2 应用配额用）。
+     *
+     * @param appName      应用名称（精确）
+     * @param templateCode 流水线模板编码（精确）
+     * @param statuses     占用额度的状态编码集合
+     */
+    public long countOccupyingByAppAndTemplate(String appName, String templateCode, List<String> statuses) {
+        return pipelineRunMapper.selectCount(
+                new LambdaQueryWrapper<PipelineRun>()
+                        .eq(PipelineRun::getAppName, appName)
+                        .eq(PipelineRun::getPipelineTemplateCode, templateCode)
+                        .in(PipelineRun::getStatus, statuses));
+    }
+
+    /**
+     * 统计占用并发额度的执行数（单流水线维度，L3 流水线配额用）。
+     *
+     * @param pipelineId 流水线 id
+     * @param statuses   占用额度的状态编码集合
+     */
+    public long countOccupyingByPipelineId(Long pipelineId, List<String> statuses) {
+        return pipelineRunMapper.selectCount(
+                new LambdaQueryWrapper<PipelineRun>()
+                        .eq(PipelineRun::getPipelineId, pipelineId)
+                        .in(PipelineRun::getStatus, statuses));
+    }
+
+    /**
+     * 查询本流水线占用并发额度的执行列表（ReplaceOldest 用，仅限本流水线范围，按 id 升序）。
+     *
+     * @param pipelineId 流水线 id
+     * @param statuses   占用额度的状态编码集合
+     * @return 占用记录列表（最早在前），无占用返回空列表
+     */
+    public List<PipelineRun> selectOccupyingByPipelineId(Long pipelineId, List<String> statuses) {
+        return pipelineRunMapper.selectList(
+                new LambdaQueryWrapper<PipelineRun>()
+                        .eq(PipelineRun::getPipelineId, pipelineId)
+                        .in(PipelineRun::getStatus, statuses)
+                        .orderByAsc(PipelineRun::getId));
+    }
+
+    /**
      * 新增
      */
     public int insert(PipelineRun entity) {

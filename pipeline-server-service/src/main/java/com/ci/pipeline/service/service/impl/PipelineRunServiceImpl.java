@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.ci.pipeline.common.auth.UserContext;
 import com.ci.pipeline.common.constants.CommonConstants;
 import com.ci.pipeline.common.constants.DistributedLockConstants;
+import com.ci.pipeline.common.constants.PipelineConcurrencyConstants;
 import com.ci.pipeline.common.constants.PipelineConstants;
 import com.ci.pipeline.common.enums.PipelineRunStatusEnum;
 import com.ci.pipeline.common.exception.BusinessException;
@@ -310,6 +311,60 @@ public class PipelineRunServiceImpl implements PipelineRunService {
             // 5) 终态处理：再拉一次详情，落地任务节点记录 + 刷新快照
             pipelineRunSyncService.handleTerminal(id);
             return toResponse(pipelineRunRepository.selectById(id));
+        } finally {
+            distributedLockService.unlock(lockKey, lockValue);
+        }
+    }
+
+    @Override
+    public void stopByConcurrencyReplace(Long id) {
+        if (id == null) {
+            throw new BusinessException(PipelineConstants.MSG_PIPELINE_RUN_ID_REQUIRED);
+        }
+        PipelineRun run = pipelineRunRepository.selectById(id);
+        if (run == null) {
+            throw new BusinessException(PipelineConstants.MSG_PIPELINE_RUN_NOT_EXIST);
+        }
+        // 已终态（Succeeded / Cancelled）无需替换（可能刚被并发操作终止，额度已释放）
+        if (PipelineRunStatusEnum.isTerminalCode(run.getStatus())) {
+            log.info("并发替换目标已终态({}), 跳过, pipelineRunId={}", run.getStatus(), id);
+            return;
+        }
+        // 非阻塞加锁，防止与用户手动停止并发冲突
+        String lockKey = DistributedLockConstants.LOCK_KEY_PIPELINE_RUN + id;
+        String lockValue = distributedLockService.tryLock(
+                lockKey, DistributedLockConstants.DEFAULT_LOCK_EXPIRE_SECONDS, "并发替换停止流水线运行");
+        if (lockValue == null) {
+            throw new BusinessException(PipelineConstants.MSG_OPERATION_LOCK_FAILED);
+        }
+        try {
+            // Argo 未稳定则 terminate；已稳定（Failed / Error）跳过 terminate 直接置 Cancelled
+            String argoPhase = getArgoPhase(run);
+            PipelineRunStatusEnum argoStatus = PipelineRunStatusEnum.ofCode(argoPhase);
+            if (!PipelineRunStatusEnum.SUCCEEDED.getCode().equals(argoPhase)
+                    && (argoStatus == null || !argoStatus.isArgoStable())) {
+                try {
+                    argoWorkflowAgent.terminateWorkflow(clusterConfigService.resolveRunClusterName(run),
+                            clusterConfigService.resolveRunNamespace(run), run.getName());
+                } catch (RuntimeException e) {
+                    // 终止 Argo 失败不阻塞新执行放行：平台侧置 Cancelled 后由兜底同步追赶
+                    log.error("并发替换终止 Argo Workflow 失败, pipelineRunId={}, name={}", id, run.getName(), e);
+                }
+            }
+            // 平台置 Cancelled，fail_type=ReplacedByNew 与用户手动停止区分，便于审计
+            PipelineRun update = new PipelineRun();
+            update.setId(run.getId());
+            update.setRevision(run.getRevision());
+            update.setStatus(PipelineRunStatusEnum.CANCELLED.getCode());
+            update.setFailType(PipelineConcurrencyConstants.FAIL_TYPE_REPLACED_BY_NEW);
+            update.setFailMessage(PipelineConcurrencyConstants.MSG_RUN_REPLACED_MESSAGE);
+            update.setEndTime(new Date());
+            if (pipelineRunRepository.updateForSync(update) != 1) {
+                throw new BusinessException(PipelineConstants.MSG_RUN_STATE_CHANGED);
+            }
+            log.info("流水线已被新执行替换停止, pipelineRunId={}, name={}", id, run.getName());
+            // 终态处理：落地任务节点记录 + 刷新快照
+            pipelineRunSyncService.handleTerminal(id);
         } finally {
             distributedLockService.unlock(lockKey, lockValue);
         }

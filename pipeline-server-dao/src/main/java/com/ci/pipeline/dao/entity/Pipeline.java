@@ -40,6 +40,16 @@ public class Pipeline implements Serializable {
     private String pipelineTemplateCode;
 
     /**
+     * 本流水线最大并发执行数；NULL 表示未配置，fallback 到模板的 appMaxRunningLimit；配置值超过模板值时按模板值生效（clamp）
+     */
+    private Integer maxRunningLimit;
+
+    /**
+     * 超限策略：Reject / ReplaceOldest；NULL 表示未配置，fallback 到模板的 overLimitPolicy
+     */
+    private String overLimitPolicy;
+
+    /**
      * 创建人
      */
     private String creator;

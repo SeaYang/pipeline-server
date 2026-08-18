@@ -50,6 +50,16 @@ public class PipelineTemplateResponse implements Serializable {
     private String clusterSchedulePolicy;
 
     /**
+     * 应用维度最大并发执行数：同一 appName 使用本模板的未完成执行数上限（统计 Pending/Running/Unknown）
+     */
+    private Integer appMaxRunningLimit;
+
+    /**
+     * 超限策略：Reject-拒绝新执行 / ReplaceOldest-终止最早执行腾位
+     */
+    private String overLimitPolicy;
+
+    /**
      * 创建人
      */
     private String creator;

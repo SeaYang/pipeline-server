@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.ci.pipeline.common.auth.UserContext;
 import com.ci.pipeline.common.constants.CommonConstants;
 import com.ci.pipeline.common.constants.PipelineConstants;
+import com.ci.pipeline.common.constants.PipelineConcurrencyConstants;
+import com.ci.pipeline.common.enums.OverLimitPolicyEnum;
 import com.ci.pipeline.common.constants.PipelineParameterConstants;
 import com.ci.pipeline.common.constants.PipelineTriggerHistoryConstants;
 import com.ci.pipeline.common.enums.ParamTypeEnum;
@@ -27,6 +29,7 @@ import com.ci.pipeline.facade.response.PageResponse;
 import com.ci.pipeline.facade.response.PipelineExecuteResponse;
 import com.ci.pipeline.facade.response.PipelineResponse;
 import com.ci.pipeline.facade.response.PipelineTemplateOptionResponse;
+import com.ci.pipeline.service.concurrency.PipelineConcurrencyChecker;
 import com.ci.pipeline.service.scheduler.cluster.ClusterScheduleStrategyManager;
 import com.ci.pipeline.service.service.ClusterConfigService;
 import com.ci.pipeline.service.remote.ArgoWorkflowAgent;
@@ -111,6 +114,9 @@ public class PipelineServiceImpl implements PipelineService {
     @Autowired
     private PipelineTriggerHistoryService pipelineTriggerHistoryService;
 
+    @Autowired
+    private PipelineConcurrencyChecker pipelineConcurrencyChecker;
+
     @Override
     public PipelineResponse create(PipelineCreateRequest request) {
         validateCreateRequired(request);
@@ -147,10 +153,14 @@ public class PipelineServiceImpl implements PipelineService {
         if (request.getName() != null && !StringUtils.hasText(request.getName())) {
             throw new BusinessException(PipelineConstants.MSG_PIPELINE_NAME_REQUIRED);
         }
-        // 仅允许修改 name（creator / appName / pipelineTemplateCode 由系统维护，不可改）
+        // 并发控制字段校验：maxRunningLimit 可空，非空时 ≥1（不校验上限，clamp 在执行时生效）；overLimitPolicy 可空，非空时枚举校验
+        validateConcurrencyFields(request.getMaxRunningLimit(), request.getOverLimitPolicy());
+        // 仅允许修改 name / maxRunningLimit / overLimitPolicy（creator / appName / pipelineTemplateCode 由系统维护，不可改）
         Pipeline entity = new Pipeline();
         entity.setId(request.getId());
         entity.setName(request.getName());
+        entity.setMaxRunningLimit(request.getMaxRunningLimit());
+        entity.setOverLimitPolicy(request.getOverLimitPolicy());
         pipelineRepository.updateById(entity);
         log.info("修改流水线成功, id={}", request.getId());
         return toResponse(pipelineRepository.selectById(request.getId()));
@@ -245,6 +255,9 @@ public class PipelineServiceImpl implements PipelineService {
         List<String> paramList = toArgoParameters(finalParameters);
         // ★ 多集群调度：按模板的调度策略 + 实时打分选择执行集群
         PipelineTemplate template = pipelineTemplateRepository.selectByPipelineTemplateCode(pipeline.getPipelineTemplateCode());
+        // ★ 三层并发检查（L1 全局 → L2 应用×模板 → L3 流水线）：插在参数校验之后、集群选择之前，
+        //   避免额度检查通过后又被参数校验拦下，浪费 ReplaceOldest 已终止的执行
+        pipelineConcurrencyChecker.checkBeforeExecute(pipeline, template);
         String clusterName = clusterScheduleStrategyManager
                 .getStrategy(template != null ? template.getClusterSchedulePolicy() : null)
                 .selectCluster(template);
@@ -483,6 +496,27 @@ public class PipelineServiceImpl implements PipelineService {
         }
         PipelineResponse response = new PipelineResponse();
         BeanUtils.copyProperties(entity, response);
+        // 回显生效并发上限（clamp 后），便于前端展示
+        PipelineTemplate template = pipelineTemplateRepository
+                .selectByPipelineTemplateCode(entity.getPipelineTemplateCode());
+        response.setEffectiveMaxRunningLimit(
+                pipelineConcurrencyChecker.resolveEffectiveLimit(entity, template));
         return response;
+    }
+
+    /**
+     * 并发控制字段校验：maxRunningLimit 可空，非空时 ≥1（不校验上限，clamp 在执行时生效）；
+     * overLimitPolicy 可空，非空时枚举校验。
+     */
+    private void validateConcurrencyFields(Integer maxRunningLimit, String overLimitPolicy) {
+        if (maxRunningLimit != null && maxRunningLimit < 1) {
+            throw new BusinessException(String.format(
+                    PipelineConcurrencyConstants.MSG_PIPELINE_LIMIT_INVALID, maxRunningLimit));
+        }
+        if (StringUtils.hasText(overLimitPolicy)
+                && !OverLimitPolicyEnum.isValidCode(overLimitPolicy)) {
+            throw new BusinessException(String.format(
+                    PipelineConcurrencyConstants.MSG_OVER_LIMIT_POLICY_INVALID, overLimitPolicy));
+        }
     }
 }

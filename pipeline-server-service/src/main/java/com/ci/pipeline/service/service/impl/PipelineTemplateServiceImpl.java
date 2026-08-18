@@ -3,8 +3,10 @@ package com.ci.pipeline.service.service.impl;
 import com.ci.pipeline.common.auth.UserContext;
 import com.ci.pipeline.common.constants.ClusterConstants;
 import com.ci.pipeline.common.constants.DistributedLockConstants;
+import com.ci.pipeline.common.constants.PipelineConcurrencyConstants;
 import com.ci.pipeline.common.constants.PipelineTemplateConstants;
 import com.ci.pipeline.common.enums.ClusterSchedulePolicyEnum;
+import com.ci.pipeline.common.enums.OverLimitPolicyEnum;
 import com.ci.pipeline.common.exception.BusinessException;
 import com.ci.pipeline.common.util.SortUtil;
 import com.ci.pipeline.dao.entity.PipelineTemplate;
@@ -106,6 +108,8 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
             BeanUtils.copyProperties(request, entity);
             // 多集群调度字段：List → 逗号串；策略校验 + 集群存在性校验
             applyClusterFields(entity, request.getClusterNames(), request.getClusterSchedulePolicy());
+            // 并发控制字段：校验 + 兜底默认值（limit 默认 1 不允许并发，策略默认 Reject）
+            applyConcurrencyFields(entity, request.getAppMaxRunningLimit(), request.getOverLimitPolicy());
             // 创建人取当前登录用户（Controller 已 @RequireLogin，保证非空）
             entity.setCreator(UserContext.getUserId());
             pipelineTemplateRepository.insert(entity);
@@ -162,6 +166,8 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
             BeanUtils.copyProperties(request, entity);
             // 多集群调度字段：List → 逗号串；策略校验 + 集群存在性校验
             applyClusterFields(entity, request.getClusterNames(), request.getClusterSchedulePolicy());
+            // 并发控制字段：校验 + 兜底默认值（limit 默认 1 不允许并发，策略默认 Reject）
+            applyConcurrencyFields(entity, request.getAppMaxRunningLimit(), request.getOverLimitPolicy());
             // creator 由系统维护，更新时不允许修改
             entity.setCreator(null);
             pipelineTemplateRepository.updateById(entity);
@@ -282,5 +288,29 @@ public class PipelineTemplateServiceImpl implements PipelineTemplateService {
             }
         }
         entity.setClusterNames(clusterConfigService.joinClusterNames(clusterNames));
+    }
+
+    /**
+     * 并发控制字段处理：appMaxRunningLimit 必填语义（不传默认 1，≥1 且 ≤1000）；
+     * overLimitPolicy 枚举校验（不传默认 Reject）。
+     */
+    private void applyConcurrencyFields(PipelineTemplate entity, Integer appMaxRunningLimit,
+                                        String overLimitPolicy) {
+        int limit = appMaxRunningLimit != null
+                ? appMaxRunningLimit
+                : PipelineConcurrencyConstants.DEFAULT_MAX_RUNNING_LIMIT;
+        if (limit < 1 || limit > PipelineConcurrencyConstants.MAX_RUNNING_LIMIT_UPPER_BOUND) {
+            throw new BusinessException(String.format(
+                    PipelineConcurrencyConstants.MSG_APP_LIMIT_INVALID, appMaxRunningLimit));
+        }
+        entity.setAppMaxRunningLimit(limit);
+        String policy = StringUtils.hasText(overLimitPolicy)
+                ? overLimitPolicy
+                : PipelineConcurrencyConstants.DEFAULT_OVER_LIMIT_POLICY;
+        if (!OverLimitPolicyEnum.isValidCode(policy)) {
+            throw new BusinessException(String.format(
+                    PipelineConcurrencyConstants.MSG_OVER_LIMIT_POLICY_INVALID, overLimitPolicy));
+        }
+        entity.setOverLimitPolicy(policy);
     }
 }

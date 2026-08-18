@@ -287,6 +287,8 @@ CREATE TABLE `pipeline` (
   `name` varchar(200) NOT NULL COMMENT '流水线名称',
   `app_name` varchar(200) NOT NULL COMMENT '服务的appName，比如：pipeline-server',
   `pipeline_template_code` varchar(200) NOT NULL COMMENT '流水线模板编码，和pipeline_template的对应',
+  `max_running_limit` int DEFAULT NULL COMMENT '本流水线最大并发执行数；NULL 表示未配置，fallback 到模板的 app_max_running_limit；配置值超过模板值时按模板值生效（clamp）',
+  `over_limit_policy` varchar(45) DEFAULT NULL COMMENT '超限策略：Reject / ReplaceOldest；NULL 表示未配置，fallback 到模板的 over_limit_policy',
   `creator` varchar(45) NOT NULL COMMENT '创建人',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -451,6 +453,8 @@ CREATE TABLE `pipeline_template` (
   `pipeline_template_group` varchar(200) NOT NULL COMMENT '流水线模板所属分组，用于分类管理',
   `cluster_names` varchar(500) DEFAULT NULL COMMENT '候选执行集群，逗号分隔多个 clusterName；NULL/空 表示不限制集群',
   `cluster_schedule_policy` varchar(45) NOT NULL DEFAULT 'Any' COMMENT '集群调度策略：Any-任意集群 / PreferSelected-优先选中集群',
+  `app_max_running_limit` int NOT NULL DEFAULT '1' COMMENT '应用维度最大并发执行数：同一 appName 使用本模板的未完成执行数上限（统计 Pending/Running/Unknown），默认1即不允许并发',
+  `over_limit_policy` varchar(45) NOT NULL DEFAULT 'Reject' COMMENT '超限策略：Reject-拒绝新执行 / ReplaceOldest-终止最早执行腾位',
   `creator` varchar(45) NOT NULL COMMENT '创建人',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -639,7 +643,8 @@ VALUES
 -- 通用配置kv数据初始化
 INSERT INTO `generic_config` (`config_key`, `config_value`, `value_format`, `description`, `creator`)
 VALUES ('gitlab.api.token','你的token','txt','访问gitlab.com的api所需要的token。','admin')
-,('gitlab.api.url','https://gitlab.com','txt','','admin');
+,('gitlab.api.url','https://gitlab.com','txt','','admin')
+,('pipeline-max-running-limit','1000','txt','全平台最大并发执行数（限流）：全平台 Pending/Running/Unknown 状态的流水线执行总数达到该值时，拒绝新的执行提交','admin');
 
 -- 字典数据初始化
 INSERT INTO `dict_type` (`dict_type`, `dict_name`, `remark`) VALUES

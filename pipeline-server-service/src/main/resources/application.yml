@@ -83,6 +83,10 @@ pipeline:
       staleness-threshold-seconds: 60
       # 单条记录异步轮询最大尝试次数（防死循环安全帽）
       max-sync-attempts: 720
+  # 并发控制配置
+  concurrency:
+    # 全局最大运行数兑底默认值（generic_config 中 pipeline-max-running-limit 未配置或非法时生效）
+    max-running-limit: 1000
 
 # Kubernetes API Server 配置（默认值，各环境可在对应 profile 中覆盖）
 # token 使用具备 pods/log 等权限的 ServiceAccount Token（不含 "Bearer " 前缀）
