@@ -613,6 +613,27 @@ CREATE TABLE `cluster_info` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `pipeline_clean_run`
+--
+
+DROP TABLE IF EXISTS `pipeline_clean_run`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pipeline_clean_run` (
+  `id`             bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `run_name`       varchar(200) NOT NULL COMMENT '业务流水线的 pipelineRunName（Argo Workflow 名称，唯一）',
+  `clean_run_name` varchar(200) DEFAULT NULL COMMENT '清理流水线的 pipelineRunName（提交成功后回填）',
+  `status`         varchar(45) NOT NULL DEFAULT 'Running' COMMENT '状态，复用 PipelineRunStatusEnum：Running / Succeeded / Failed',
+  `end_time`       datetime DEFAULT NULL COMMENT '清理结束时间（回调/兜底回填）',
+  `create_time`    datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间（即清理触发/开始时间）',
+  `update_time`    datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_run_name` (`run_name`),
+  KEY `idx_status_create_time` (`status`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线终态清理记录';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- 种子数据：存量集群（token 由运维替换为真实值，即原 application-local.yml 中的配置）
 --
 
@@ -627,6 +648,16 @@ VALUES
    'https://192.168.10.130:6443', 'REPLACE_ME', 0,
    5000, 10000, 0.20,
    1, 1, 1, 'admin');
+
+--
+-- 种子数据：定时任务注册（含流水线终态清理兜底检查）
+--
+
+INSERT INTO `cron_job`
+(`name`, `bean_name`, `method_name`, `method_params`, `cron_expr`, `enabled`, `misfire_policy`, `concurrent`)
+VALUES
+('流水线执行状态兜底同步', 'pipelineRunSyncGuardJob', 'execute', NULL, '0 * * * * ?', 1, 'skip', 0),
+('流水线终态清理兜底检查', 'pipelineCleanGuardJob', 'execute', NULL, '0 */5 * * * ?', 1, 'skip', 0);
 
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 

@@ -8,6 +8,7 @@ import com.ci.pipeline.dao.repository.PipelineRunRepository;
 import com.ci.pipeline.dao.repository.PipelineRunSnapshotRepository;
 import com.ci.pipeline.dao.repository.PipelineTaskRunRepository;
 import com.ci.pipeline.service.service.ClusterConfigService;
+import com.ci.pipeline.service.service.PipelineCleanService;
 import com.ci.pipeline.service.config.PipelineRunSyncProperties;
 import com.ci.pipeline.service.service.hook.PipelineRunStatusContext;
 import com.ci.pipeline.service.service.hook.PipelineRunStatusHook;
@@ -75,6 +76,10 @@ public class PipelineRunSyncServiceImpl implements PipelineRunSyncService {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    /** 终态清理触发（best-effort，专用线程池异步执行） */
+    @Autowired
+    private PipelineCleanService pipelineCleanService;
 
     /**
      * 容器内所有状态变化 Hook；为空时不影响同步主流程
@@ -289,6 +294,8 @@ public class PipelineRunSyncServiceImpl implements PipelineRunSyncService {
             // 仅 Succeeded / Cancelled 终态落地任务节点记录
             if (target == PipelineRunStatusEnum.SUCCEEDED || target == PipelineRunStatusEnum.CANCELLED) {
                 landTaskRuns(run.getId(), workflow);
+                // 终态落地完成后触发清理流水线（best-effort，异步专用线程池）
+                pipelineCleanService.triggerCleanAsync(run.getId());
             }
         } else {
             log.info("流水线执行记录 generation 刷新, pipelineRunId={}, revision({} -> {}), generation={}",
