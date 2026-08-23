@@ -45,6 +45,29 @@ public class ThreadPoolExecutorPoolConfig {
     }
 
     /**
+     * 流水线终态清理触发线程池。
+     * <p>与状态同步线程池（pipelineRunSyncExecutor）完全隔离：清理触发若复用同步线程池
+     * 会形成线程池嵌套（同步线程等待清理任务、清理任务又排在同一池的队列里，极端情况下互相等待）。
+     * 提交即返回，不阻塞终态处理；有界队列 + CallerRuns 兜底。
+     */
+    @Bean("pipelineCleanExecutor")
+    public ThreadPoolTaskExecutor pipelineCleanExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(100);
+        executor.setKeepAliveSeconds(60);
+        executor.setThreadNamePrefix("pipeline-clean-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.setThreadGroupName("pipelineCleanExecutor");
+        executor.initialize();
+        log.info("流水线终态清理线程池初始化完成, core=2, max=4, queue=100");
+        return executor;
+    }
+
+    /**
      * 日志 SSE watch 线程池。
      * <p>每个日志 SSE 连接会占用一个线程持续读取 k8s 日志流（follow=true 阻塞），
      * 因此需要独立于状态同步线程池，避免占满影响状态同步。
