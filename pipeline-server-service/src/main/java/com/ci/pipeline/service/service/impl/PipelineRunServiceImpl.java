@@ -6,6 +6,7 @@ import com.ci.pipeline.common.constants.CommonConstants;
 import com.ci.pipeline.common.constants.DistributedLockConstants;
 import com.ci.pipeline.common.constants.PipelineConcurrencyConstants;
 import com.ci.pipeline.common.constants.PipelineConstants;
+import com.ci.pipeline.common.constants.PipelineEventConstants;
 import com.ci.pipeline.common.enums.PipelineRunStatusEnum;
 import com.ci.pipeline.common.exception.BusinessException;
 import com.ci.pipeline.common.util.SortUtil;
@@ -125,6 +126,8 @@ public class PipelineRunServiceImpl implements PipelineRunService {
         run.setPipelineTemplateVersion(effective.getVersion());
         run.setStatus(PipelineRunStatusEnum.PENDING.getCode());
         run.setArguments(serializeArguments(parameters));
+        // 入参携带 git-branch 时落地（部分模板如纯部署类无此参数，则不落地）
+        run.setGitBranch(parameters.get(PipelineEventConstants.PARAM_KEY_GIT_BRANCH));
         run.setCreator(UserContext.getUserId());
         pipelineRunRepository.insert(run);
         Long runId = run.getId();

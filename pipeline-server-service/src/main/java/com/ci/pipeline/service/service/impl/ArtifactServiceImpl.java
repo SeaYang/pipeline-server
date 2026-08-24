@@ -72,6 +72,11 @@ public class ArtifactServiceImpl implements ArtifactService {
             if (run != null) {
                 entity.setPipelineRunId(run.getId());
                 entity.setBuildUser(run.getCreator());
+                // 回写流水线实际拉取的 commitId（仅首次，已有值不覆盖）
+                if (StringUtils.hasText(request.getCommitId())
+                        && !StringUtils.hasText(run.getCommitId())) {
+                    pipelineRunRepository.updateCommitIdIfAbsent(run.getId(), request.getCommitId());
+                }
             }
         }
 
