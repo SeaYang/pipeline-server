@@ -167,6 +167,19 @@ public class PipelineRunRepository {
     }
 
     /**
+     * 仅当 commit_id 为空时回写（制品回调落地实际拉取的 commitId，幂等：已有值不覆盖）
+     *
+     * @return 影响行数（1=回写成功，0=已有值或记录不存在）
+     */
+    public int updateCommitIdIfAbsent(Long id, String commitId) {
+        return pipelineRunMapper.update(null,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<PipelineRun>()
+                        .eq(PipelineRun::getId, id)
+                        .isNull(PipelineRun::getCommitId)
+                        .set(PipelineRun::getCommitId, commitId));
+    }
+
+    /**
      * 根据主键逻辑删除
      */
     public int deleteById(Long id) {
