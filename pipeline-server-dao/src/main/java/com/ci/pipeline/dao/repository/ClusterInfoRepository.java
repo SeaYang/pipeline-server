@@ -1,6 +1,7 @@
 package com.ci.pipeline.dao.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ci.pipeline.dao.entity.ClusterInfo;
@@ -81,6 +82,16 @@ public class ClusterInfoRepository {
 
     public int updateById(ClusterInfo entity) {
         return clusterInfoMapper.updateById(entity);
+    }
+
+    /**
+     * 清空运行数上限（max_running_workflows=NULL，即不启用）。
+     * updateById 只 SET 非 null 字段，置空必须用 wrapper 显式 set null。
+     */
+    public int clearMaxRunningWorkflows(Long id) {
+        return clusterInfoMapper.update(null, new LambdaUpdateWrapper<ClusterInfo>()
+                .set(ClusterInfo::getMaxRunningWorkflows, null)
+                .eq(ClusterInfo::getId, id));
     }
 
     /**
