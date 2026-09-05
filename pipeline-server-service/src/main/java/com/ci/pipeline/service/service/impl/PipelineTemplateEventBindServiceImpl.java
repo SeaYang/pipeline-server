@@ -112,10 +112,15 @@ public class PipelineTemplateEventBindServiceImpl implements PipelineTemplateEve
                     request.getEventType(), request.getPipelineTemplateCode()));
         }
 
-        BeanUtils.copyProperties(request, existing);
-        repository.updateById(existing);
-        log.info("修改事件-模板绑定成功, id={}", existing.getId());
-        return toResponse(repository.selectById(existing.getId()));
+        // 干净实体承接请求字段，不回写查询快照：
+        // 回写快照会把旧的 update_time/create_time/creator 整行 SET 回去（冻结 update_time、并发覆盖他人修改）
+        PipelineTemplateEventBind entity = new PipelineTemplateEventBind();
+        entity.setId(request.getId());
+        entity.setEventType(request.getEventType());
+        entity.setPipelineTemplateCode(request.getPipelineTemplateCode());
+        repository.updateById(entity);
+        log.info("修改事件-模板绑定成功, id={}", request.getId());
+        return toResponse(repository.selectById(request.getId()));
     }
 
     @Override

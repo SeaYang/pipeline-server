@@ -153,11 +153,14 @@ public class PipelineParameterServiceImpl implements PipelineParameterService {
 
             validateDependParams(request.getDependParams(), request.getId(), request.getName());
 
-            BeanUtils.copyProperties(request, existing);
-            applyDefaults(existing);
-            pipelineParameterRepository.updateById(existing);
-            log.info("更新参数定义成功, name={}, id={}", existing.getName(), existing.getId());
-            return toResponse(pipelineParameterRepository.selectById(existing.getId()));
+            // 干净实体承接请求字段，不回写查询快照：
+            // 回写快照会把旧的 update_time/create_time/creator 整行 SET 回去（冻结 update_time、并发覆盖他人修改）
+            PipelineParameter entity = new PipelineParameter();
+            BeanUtils.copyProperties(request, entity);
+            applyDefaults(entity);
+            pipelineParameterRepository.updateById(entity);
+            log.info("更新参数定义成功, name={}, id={}", entity.getName(), entity.getId());
+            return toResponse(pipelineParameterRepository.selectById(entity.getId()));
         } finally {
             distributedLockService.unlock(lockKey, lockValue);
         }

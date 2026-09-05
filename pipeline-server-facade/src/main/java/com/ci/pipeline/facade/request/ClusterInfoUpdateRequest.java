@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * 集群修改入参（clusterName 不可修改；token 类字段传空表示不修改）
@@ -87,4 +88,11 @@ public class ClusterInfoUpdateRequest implements Serializable {
      * 是否设为默认集群（全局唯一）
      */
     private Boolean isDefault;
+
+    /**
+     * 需要显式清空（SET NULL）的字段名白名单，当前仅支持 maxRunningWorkflows。
+     * <p>背景：MyBatis-Plus updateById 只 SET 非 null 字段，字段传 null 无法与"不修改"区分，
+     * 清空必须在此显式声明（JSON Merge Patch 语义）。
+     */
+    private List<String> clearFields;
 }

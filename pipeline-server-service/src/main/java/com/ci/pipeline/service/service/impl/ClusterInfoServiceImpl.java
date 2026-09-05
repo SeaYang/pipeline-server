@@ -38,6 +38,9 @@ public class ClusterInfoServiceImpl implements ClusterInfoService {
 
     private static final Pattern CLUSTER_NAME = Pattern.compile(ClusterConstants.CLUSTER_NAME_PATTERN);
 
+    /** update 请求 clearFields 支持的字段白名单（当前仅运行数上限可清空） */
+    private static final String CLEAR_FIELD_MAX_RUNNING_WORKFLOWS = "maxRunningWorkflows";
+
     @Autowired
     private ClusterInfoRepository clusterInfoRepository;
 
@@ -128,59 +131,78 @@ public class ClusterInfoServiceImpl implements ClusterInfoService {
         if (existing == null) {
             throw new BusinessException(String.format("集群不存在, id=%s", request.getId()));
         }
+        // 部分更新：只 SET 本次请求明确修改的列，不回写查询快照。
+        // 回写快照会把旧的 update_time/create_time/creator 等整行 SET 回去：
+        // 1) 显式 SET 旧 update_time 会压住表上的 ON UPDATE CURRENT_TIMESTAMP，导致更新时间不变；
+        // 2) 并发场景下会把别人刚改的列覆盖回快照值。
+        ClusterInfo update = new ClusterInfo();
+        update.setId(request.getId());
         if (StringUtils.isNotBlank(request.getArgoUrl())) {
             validateUrl("argoUrl", request.getArgoUrl());
-            existing.setArgoUrl(request.getArgoUrl());
+            update.setArgoUrl(request.getArgoUrl());
         }
         if (StringUtils.isNotBlank(request.getK8sMasterUrl())) {
             validateUrl("k8sMasterUrl", request.getK8sMasterUrl());
-            existing.setK8sMasterUrl(request.getK8sMasterUrl());
+            update.setK8sMasterUrl(request.getK8sMasterUrl());
         }
         // token 留空表示不修改
         if (StringUtils.isNotBlank(request.getArgoToken())) {
-            existing.setArgoToken(request.getArgoToken());
+            update.setArgoToken(request.getArgoToken());
         }
         if (StringUtils.isNotBlank(request.getK8sToken())) {
-            existing.setK8sToken(request.getK8sToken());
+            update.setK8sToken(request.getK8sToken());
         }
         if (StringUtils.isNotBlank(request.getArgoNamespace())) {
-            existing.setArgoNamespace(request.getArgoNamespace());
+            update.setArgoNamespace(request.getArgoNamespace());
         }
         if (request.getK8sVerifyingSsl() != null) {
-            existing.setK8sVerifyingSsl(request.getK8sVerifyingSsl() ? 1 : 0);
+            update.setK8sVerifyingSsl(request.getK8sVerifyingSsl() ? 1 : 0);
         }
         if (request.getConnectTimeoutMs() != null) {
-            existing.setConnectTimeoutMs(request.getConnectTimeoutMs());
+            update.setConnectTimeoutMs(request.getConnectTimeoutMs());
         }
         if (request.getReadTimeoutMs() != null) {
-            existing.setReadTimeoutMs(request.getReadTimeoutMs());
+            update.setReadTimeoutMs(request.getReadTimeoutMs());
         }
         if (request.getFreeMemoryThreshold() != null) {
-            existing.setFreeMemoryThreshold(request.getFreeMemoryThreshold());
+            update.setFreeMemoryThreshold(request.getFreeMemoryThreshold());
         }
         if (request.getMaxRunningWorkflows() != null) {
-            existing.setMaxRunningWorkflows(request.getMaxRunningWorkflows());
+            update.setMaxRunningWorkflows(request.getMaxRunningWorkflows());
         }
         if (request.getEnabled() != null) {
-            existing.setEnabled(request.getEnabled() ? 1 : 0);
+            update.setEnabled(request.getEnabled() ? 1 : 0);
         }
         if (request.getOnline() != null) {
-            existing.setOnline(request.getOnline() ? 1 : 0);
+            update.setOnline(request.getOnline() ? 1 : 0);
         }
         if (request.getDescription() != null) {
-            existing.setDescription(request.getDescription());
+            update.setDescription(request.getDescription());
         }
         // 修改人取当前登录用户（Controller 已 @RequireLogin，保证非空）
-        existing.setUpdater(UserContext.getUserId());
+        update.setUpdater(UserContext.getUserId());
 
         boolean setDefault = Boolean.TRUE.equals(request.getIsDefault());
         if (setDefault && !Integer.valueOf(1).equals(existing.getIsDefault())) {
             clusterInfoRepository.clearDefaultMark();
         }
         if (request.getIsDefault() != null) {
-            existing.setIsDefault(setDefault ? 1 : 0);
+            update.setIsDefault(setDefault ? 1 : 0);
         }
-        clusterInfoRepository.updateById(existing);
+        clusterInfoRepository.updateById(update);
+
+        // 显式清空字段（Merge Patch 语义）：字段传 null 与"不修改"无法区分，置空需在 clearFields 声明
+        List<String> clearFields = request.getClearFields();
+        if (clearFields != null && !clearFields.isEmpty()) {
+            for (String field : clearFields) {
+                if (!CLEAR_FIELD_MAX_RUNNING_WORKFLOWS.equals(field)) {
+                    throw new BusinessException(String.format("不支持清空的字段, field=%s", field));
+                }
+            }
+            if (clearFields.contains(CLEAR_FIELD_MAX_RUNNING_WORKFLOWS)) {
+                clusterInfoRepository.clearMaxRunningWorkflows(update.getId());
+            }
+        }
         log.info("更新集群成功, clusterName={}", existing.getClusterName());
         return toResponse(clusterInfoRepository.selectById(existing.getId()));
     }
@@ -207,8 +229,11 @@ public class ClusterInfoServiceImpl implements ClusterInfoService {
         if (existing == null) {
             throw new BusinessException(String.format("集群不存在, clusterName=%s", clusterName));
         }
-        existing.setOnline(online ? 1 : 0);
-        clusterInfoRepository.updateById(existing);
+        // 同 update：只 SET online 列，避免整行回写覆盖并发修改、冻结 update_time
+        ClusterInfo update = new ClusterInfo();
+        update.setId(existing.getId());
+        update.setOnline(online ? 1 : 0);
+        clusterInfoRepository.updateById(update);
         log.info("集群摘流状态变更, clusterName={}, online={}", clusterName, online);
     }
 
