@@ -10,7 +10,7 @@ CREATE TABLE `pipeline_clean_run` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_run_name` (`run_name`),
     KEY `idx_status_create_time` (`status`, `create_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线终态清理记录';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线终态清理记录';
 
 -- 兜底检查定时任务（由 CronJobScheduler 反射调用）
 INSERT INTO `cron_job`

@@ -30,4 +30,4 @@ CREATE TABLE `pipeline_task_run` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_pipeline_run_id` (`pipeline_run_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线执行-任务节点记录表，对应pipeline_run的一个任务节点的具体执行';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线执行-任务节点记录表，对应pipeline_run的一个任务节点的具体执行';

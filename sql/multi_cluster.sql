@@ -41,7 +41,7 @@ CREATE TABLE `cluster_info` (
   `deleted`                tinyint(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除 1-已删除',
   PRIMARY KEY (`id`),
   KEY `idx_cluster_name` (`cluster_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='执行集群定义表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='执行集群定义表';
 
 -- ---------------------------------------------------------------------------
 -- 流水线模板表加列（候选集群 + 调度策略）

@@ -30,7 +30,7 @@ CREATE TABLE `pipeline_template` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_pipeline_template_code` (`pipeline_template_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线模板的定义';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线模板的定义';
 
 -- ---------------------------------------------------------------------------
 -- 流水线模板版本表（版本详情：argo WorkflowTemplate json 字符串）
@@ -48,4 +48,4 @@ CREATE TABLE `pipeline_template_version` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_pipeline_template_code` (`pipeline_template_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线模板的版本管理表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线模板的版本管理表';

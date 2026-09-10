@@ -11,4 +11,4 @@ CREATE TABLE `app_parameter_config` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_app_param_env` (`app_name`, `parameter_name`, `env`, `deleted`),
     KEY `idx_app_env` (`app_name`, `env`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='应用参数配置';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='应用参数配置';

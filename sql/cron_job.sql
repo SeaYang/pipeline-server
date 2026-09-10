@@ -17,7 +17,7 @@ CREATE TABLE `cron_job` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0' COMMENT '逻辑删除：0-未删除 1-已删除',
   PRIMARY KEY (`id`),
   KEY `idx_next_fire_time` (`enabled`, `next_fire_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='定时任务定义表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='定时任务定义表';
 
 -- 定时任务执行日志表
 CREATE TABLE `cron_job_log` (
@@ -38,7 +38,7 @@ CREATE TABLE `cron_job_log` (
   PRIMARY KEY (`id`),
   KEY `idx_job_id` (`job_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='定时任务执行日志表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='定时任务执行日志表';
 
 -- 任务定义：流水线执行状态兜底同步（见 com.ci.pipeline.service.job.PipelineRunSyncGuardJob）
 -- 每分钟扫描一次"运行中且更新时间超过陈旧阈值(默认60s)"的执行记录，触发兜底同步

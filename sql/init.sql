@@ -23,7 +23,7 @@
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!50503 SET NAMES utf8 */;
+/*!50503 SET NAMES utf8mb4 */;
 /*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
 /*!40103 SET TIME_ZONE='+00:00' */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
@@ -49,7 +49,7 @@ CREATE TABLE `app_info` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='应用基础信息表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='应用基础信息表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -71,7 +71,7 @@ CREATE TABLE `app_parameter_config` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_app_param_env` (`app_name`,`parameter_name`,`env`,`deleted`),
   KEY `idx_app_env` (`app_name`,`env`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='应用参数配置';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='应用参数配置';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -105,7 +105,7 @@ CREATE TABLE `artifact` (
   KEY `idx_app_name` (`app_name`),
   KEY `idx_pipeline_run_id` (`pipeline_run_id`),
   KEY `idx_pipeline_run_name` (`pipeline_run_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='制品信息表，记录流水线构建产出的制品信息';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='制品信息表，记录流水线构建产出的制品信息';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -133,7 +133,7 @@ CREATE TABLE `cron_job` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0' COMMENT '逻辑删除：0-未删除 1-已删除',
   PRIMARY KEY (`id`),
   KEY `idx_next_fire_time` (`enabled`,`next_fire_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='定时任务定义表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='定时任务定义表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -161,7 +161,7 @@ CREATE TABLE `cron_job_log` (
   PRIMARY KEY (`id`),
   KEY `idx_job_id` (`job_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='定时任务执行日志表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='定时任务执行日志表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -184,7 +184,7 @@ CREATE TABLE `dict_data` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_dict_type` (`dict_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='字典数据表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='字典数据表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -203,7 +203,7 @@ CREATE TABLE `dict_type` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='字典类型表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='字典类型表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -224,7 +224,7 @@ CREATE TABLE `distributed_lock` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_lock_key` (`lock_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='分布式锁记录表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分布式锁记录表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -247,7 +247,7 @@ CREATE TABLE `generic_config` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0' COMMENT '逻辑删除：0-未删除 1-已删除',
   PRIMARY KEY (`id`),
   KEY `idx_config_key` (`config_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='通用配置表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通用配置表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -272,7 +272,7 @@ CREATE TABLE `generic_config_history` (
   PRIMARY KEY (`id`),
   KEY `idx_config_id` (`config_id`),
   KEY `idx_operate_time` (`operate_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='通用配置变更历史表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通用配置变更历史表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -295,7 +295,7 @@ CREATE TABLE `pipeline` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_app` (`app_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线实例表，保存appName和流水线模板之间的关联关系，一个流水线模板可以被多个appName使用';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线实例表，保存appName和流水线模板之间的关联关系，一个流水线模板可以被多个appName使用';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -317,7 +317,7 @@ CREATE TABLE `pipeline_event_bind` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_app_event_template` (`app_name`,`event_type`,`pipeline_template_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='事件与pipeline实例的绑定关系表，事件首次触发时自动创建';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='事件与pipeline实例的绑定关系表，事件首次触发时自动创建';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -350,7 +350,7 @@ CREATE TABLE `pipeline_parameter` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_param_code` (`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线参数定义表，argo workflow template的yaml在平台上管理，yaml本身可以有各种输入参数，为了规范化参数管理，这些参数需要在平台上定义好';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线参数定义表，argo workflow template的yaml在平台上管理，yaml本身可以有各种输入参数，为了规范化参数管理，这些参数需要在平台上定义好';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -388,7 +388,7 @@ CREATE TABLE `pipeline_run` (
   KEY `idx_name` (`name`),
   KEY `idx_cluster_name` (`cluster_name`),
   KEY `idx_status_update_time` (`status`,`update_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线执行记录表，对应pipeline的一次具体执行';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线执行记录表，对应pipeline的一次具体执行';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -435,7 +435,7 @@ CREATE TABLE `pipeline_task_run` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_pipeline_run_id` (`pipeline_run_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线执行-任务节点记录表，对应pipeline_run的一个任务节点的具体执行';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线执行-任务节点记录表，对应pipeline_run的一个任务节点的具体执行';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -460,7 +460,7 @@ CREATE TABLE `pipeline_template` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线模板的定义';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线模板的定义';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -480,7 +480,7 @@ CREATE TABLE `pipeline_template_event_bind` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_event_type` (`event_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='事件与流水线模板的绑定关系表，后台配置，一个事件可绑定多个模板';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='事件与流水线模板的绑定关系表，后台配置，一个事件可绑定多个模板';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -502,7 +502,7 @@ CREATE TABLE `pipeline_template_version` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线模板的版本管理表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线模板的版本管理表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -531,7 +531,7 @@ CREATE TABLE `pipeline_trigger_history` (
   PRIMARY KEY (`id`),
   KEY `idx_pipeline_id` (`pipeline_id`),
   KEY `idx_app_name` (`app_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线触发历史记录表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线触发历史记录表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -552,7 +552,7 @@ CREATE TABLE `task_template` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线任务模板表，保存任务模板的基础字段定义，一个任务模板也对应了一个argo WorkflowTemplate';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线任务模板表，保存任务模板的基础字段定义，一个任务模板也对应了一个argo WorkflowTemplate';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -574,7 +574,7 @@ CREATE TABLE `task_template_version` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线任务模板的版本表，管理任务模板的版本详情（argo workflow template json字符串）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线任务模板的版本表，管理任务模板的版本详情（argo workflow template json字符串）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -609,7 +609,7 @@ CREATE TABLE `cluster_info` (
   `deleted`                tinyint(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除 1-已删除',
   PRIMARY KEY (`id`),
   KEY `idx_cluster_name` (`cluster_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='执行集群定义表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='执行集群定义表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -630,7 +630,7 @@ CREATE TABLE `pipeline_clean_run` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_run_name` (`run_name`),
   KEY `idx_status_create_time` (`status`, `create_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线终态清理记录';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线终态清理记录';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --

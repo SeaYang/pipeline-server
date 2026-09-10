@@ -18,4 +18,4 @@ CREATE TABLE `pipeline_template_event_bind` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_event_type` (`event_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='事件与流水线模板的绑定关系表，后台配置，一个事件可绑定多个模板';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='事件与流水线模板的绑定关系表，后台配置，一个事件可绑定多个模板';

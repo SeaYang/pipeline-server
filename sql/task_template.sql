@@ -28,7 +28,7 @@ CREATE TABLE `task_template` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_task_template_code` (`task_template_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线任务模板表，保存任务模板的基础字段定义，一个任务模板也对应了一个argo WorkflowTemplate';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线任务模板表，保存任务模板的基础字段定义，一个任务模板也对应了一个argo WorkflowTemplate';
 
 -- ---------------------------------------------------------------------------
 -- 任务模板版本表（版本详情：argo WorkflowTemplate json 字符串）
@@ -46,4 +46,4 @@ CREATE TABLE `task_template_version` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_task_template_code` (`task_template_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线任务模板的版本表，管理任务模板的版本详情（argo workflow template json字符串）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线任务模板的版本表，管理任务模板的版本详情（argo workflow template json字符串）';

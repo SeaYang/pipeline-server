@@ -28,4 +28,4 @@ CREATE TABLE `pipeline` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_app` (`app_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线实例表，保存appName和流水线模板之间的关联关系，一个流水线模板可以被多个appName使用';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线实例表，保存appName和流水线模板之间的关联关系，一个流水线模板可以被多个appName使用';
