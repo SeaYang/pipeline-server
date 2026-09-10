@@ -72,6 +72,7 @@ java -jar pipeline-server-service/target/pipeline-server-service-1.0.0.jar --spr
 - Use Lombok annotations (`@Data`, `@Slf4j`, etc.) to reduce boilerplate
 - MyBatis-Plus for ORM, mapper XML files under `pipeline-server-dao/src/main/resources/mapper/`
 - Database table naming: snake_case; Entity field naming: camelCase (auto-mapped by MyBatis-Plus)
+- All tables MUST use `utf8mb4` charset (never `utf8mb3` / `utf8`), see 编码规范 → 数据库 DDL 规范
 - API interfaces defined in facade module, implemented in service module
 
 ## 编码规范 (Coding Standards)
@@ -110,6 +111,24 @@ public final class KubernetesConstants {
 ```
 
 业务类中通过静态引用使用：`KubernetesConstants.ARGO_NAMESPACE`。
+
+### 数据库 DDL 规范 (Database DDL)
+
+- **建表语句统一使用 `utf8mb4` 字符集，禁止 `utf8mb3`（及其别名 `utf8`）。** `utf8mb3` 最多 3 字节，无法存储 emoji 等 4 字节字符，而应用名、备注、日志类字段完全可能出现；MySQL 8 中 `utf8mb3` 已被标记废弃。
+- 生成 DDL 时必须显式声明字符集：`ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`；需要显式排序规则时使用 `COLLATE=utf8mb4_0900_ai_ci`。
+- 字符集名称拼写必须是完整的 `utf8mb4`，不要漏写 `8`（如 `utfmb4`）或写成 `utf8`。
+- `sql/` 目录下的单表文件与聚合脚本 `sql/init.sql` 必须同步修改，不允许只改一处。
+- 存量表如需转换字符集：`ALTER TABLE xxx CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;`
+
+**示例：**
+
+```sql
+-- ❌ 禁止：utf8mb3（以及其别名 utf8）
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='应用基础信息表';
+
+-- ✅ 正确：utf8mb4
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='应用基础信息表';
+```
 
 ## Health Check
 

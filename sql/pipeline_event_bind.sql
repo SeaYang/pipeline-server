@@ -21,4 +21,4 @@ CREATE TABLE `pipeline_event_bind` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_app_event_template` (`app_name`, `event_type`, `pipeline_template_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='事件与pipeline实例的绑定关系表，事件首次触发时自动创建';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='事件与pipeline实例的绑定关系表，事件首次触发时自动创建';

@@ -10,4 +10,4 @@ CREATE TABLE `distributed_lock` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_lock_key` (`lock_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='分布式锁记录表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分布式锁记录表';

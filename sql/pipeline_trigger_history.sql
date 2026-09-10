@@ -17,4 +17,4 @@ CREATE TABLE `pipeline_trigger_history` (
   PRIMARY KEY (`id`),
   KEY `idx_pipeline_id` (`pipeline_id`),
   KEY `idx_app_name` (`app_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线触发历史记录表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线触发历史记录表';

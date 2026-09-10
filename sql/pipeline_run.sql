@@ -41,4 +41,4 @@ CREATE TABLE `pipeline_run` (
   KEY `idx_app_name` (`app_name`),
   KEY `idx_cluster_name` (`cluster_name`),
   KEY `idx_status_update_time` (`status`, `update_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='流水线执行记录表，对应pipeline的一次具体执行';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线执行记录表，对应pipeline的一次具体执行';

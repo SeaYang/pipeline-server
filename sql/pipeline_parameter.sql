@@ -21,4 +21,4 @@ CREATE TABLE `pipeline_parameter` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `idx_param_name` (`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utfmb3 COMMENT='流水线参数定义表，全局共享，规范化argo workflow template的参数管理';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流水线参数定义表，全局共享，规范化argo workflow template的参数管理';

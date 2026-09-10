@@ -23,7 +23,7 @@ CREATE TABLE `dict_type` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='字典类型表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='字典类型表';
 
 -- ---------------------------------------------------------------------------
 -- 字典数据表

@@ -34,4 +34,4 @@ CREATE TABLE `artifact` (
   KEY `idx_app_name` (`app_name`),
   KEY `idx_pipeline_run_id` (`pipeline_run_id`),
   KEY `idx_pipeline_run_name` (`pipeline_run_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='制品信息表，记录流水线构建产出的制品信息';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='制品信息表，记录流水线构建产出的制品信息';

@@ -12,7 +12,7 @@ CREATE TABLE `generic_config` (
   `deleted` tinyint(1) NOT NULL DEFAULT '0' COMMENT '逻辑删除：0-未删除 1-已删除',
   PRIMARY KEY (`id`),
   KEY `idx_config_key` (`config_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='通用配置表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通用配置表';
 
 -- 通用配置变更历史表
 CREATE TABLE `generic_config_history` (
@@ -30,4 +30,4 @@ CREATE TABLE `generic_config_history` (
   PRIMARY KEY (`id`),
   KEY `idx_config_id` (`config_id`),
   KEY `idx_operate_time` (`operate_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COMMENT='通用配置变更历史表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通用配置变更历史表';
