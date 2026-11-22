@@ -82,7 +82,7 @@ public class TaskTemplateController {
     }
 
     /**
-     * 任务模板所属分组下拉列表（字典 task-template-group，按 sort 升序）
+     * 任务模板所属分组下拉列表（字典 task-template-group，按 sort 降序）
      */
     @GetMapping("/groups")
     public Result<List<DictDataResponse>> groups() {

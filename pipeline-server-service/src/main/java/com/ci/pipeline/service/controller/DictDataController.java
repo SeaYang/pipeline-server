@@ -66,7 +66,7 @@ public class DictDataController {
     }
 
     /**
-     * 查询指定字典类型下的全部数据（按排序值升序，用于下拉框 / 枚举渲染）
+     * 查询指定字典类型下的全部数据（按排序值降序，用于下拉框 / 枚举渲染）
      */
     @GetMapping("/list")
     public Result<List<DictDataResponse>> list(@RequestParam("dictType") String dictType) {

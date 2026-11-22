@@ -42,7 +42,7 @@ public interface DictDataMapper extends BaseMapper<DictData> {
     long countByDictType(@Param("dictType") String dictType);
 
     /**
-     * 查询指定字典类型下的全部数据（仅未删除，按排序值升序）
+     * 查询指定字典类型下的全部数据（仅未删除，按排序值降序）
      *
      * @param dictType 字典类型标识
      * @return 字典数据列表
