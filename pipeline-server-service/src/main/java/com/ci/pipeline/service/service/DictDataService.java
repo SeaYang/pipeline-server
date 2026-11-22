@@ -34,7 +34,7 @@ public interface DictDataService {
     DictDataResponse getById(Long id);
 
     /**
-     * 查询指定字典类型下的全部数据（按排序值升序）
+     * 查询指定字典类型下的全部数据（按排序值降序）
      */
     List<DictDataResponse> listByDictType(String dictType);
 

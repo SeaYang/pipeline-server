@@ -51,7 +51,7 @@ public class DictDataRepository {
     }
 
     /**
-     * 查询指定字典类型下的全部数据（仅未删除，按排序值升序）
+     * 查询指定字典类型下的全部数据（仅未删除，按排序值降序）
      */
     public List<DictData> listByDictType(String dictType) {
         return dictDataMapper.listByDictType(dictType);

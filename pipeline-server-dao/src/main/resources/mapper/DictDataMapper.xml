@@ -52,7 +52,7 @@
         FROM dict_data
         WHERE deleted = 0
           AND dict_type = #{dictType}
-        ORDER BY dict_sort ASC, id ASC
+        ORDER BY dict_sort DESC, id ASC
     </select>
 
     <!-- 分页由 MyBatis-Plus 分页插件自动改写，这里无需手写 LIMIT -->
@@ -81,7 +81,7 @@
                 ${sortField} ${sortOrder}, id DESC
             </when>
             <otherwise>
-                dict_sort ASC, id ASC
+                dict_sort DESC, id ASC
             </otherwise>
         </choose>
     </select>

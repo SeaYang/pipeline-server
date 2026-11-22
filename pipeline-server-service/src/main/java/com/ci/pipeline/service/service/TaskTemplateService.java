@@ -40,7 +40,7 @@ public interface TaskTemplateService {
     PageResponse<TaskTemplateResponse> page(TaskTemplateQueryRequest query);
 
     /**
-     * 任务模板所属分组下拉列表（从字典 task-template-group 查询，按 sort 升序）
+     * 任务模板所属分组下拉列表（从字典 task-template-group 查询，按 sort 降序）
      */
     List<DictDataResponse> listGroups();
 }

@@ -39,7 +39,7 @@ public interface PipelineTemplateService {
     List<PipelineTemplateResponse> list(PipelineTemplateQueryRequest query);
 
     /**
-     * 流水线模板所属分组下拉列表（从字典 programming-language 查询，按 sort 升序）
+     * 流水线模板所属分组下拉列表（从字典 programming-language 查询，按 sort 降序）
      */
     List<DictDataResponse> listGroups();
 }
