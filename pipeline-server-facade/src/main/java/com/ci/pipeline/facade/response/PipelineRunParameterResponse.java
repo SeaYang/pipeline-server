@@ -24,6 +24,9 @@ public class PipelineRunParameterResponse implements Serializable {
     private String paramGroup;
     private Integer paramGroupSort;
 
+    /** 参数分组的组间排序值（取自字典 pipeline-parameter-group 的 dict_sort，越大越靠前） */
+    private Integer groupSort;
+
     /** 当前值（已计算） */
     private String value;
 

@@ -18,9 +18,11 @@ public final class TaskTemplateConstants {
     public static final String DICT_TYPE_TASK_TEMPLATE_GROUP = "task-template-group";
 
     /**
-     * 任务模板编码格式：小写字母，多段用 - 连接，如 a、a-b、a-b-c
+     * 任务模板编码格式：字母开头的多段格式，段内可含数字，用 - 连接，如 a、a-b、k8s-deploy-via-api
+     * <p>模板编码即 Argo WorkflowTemplate 名（k8s DNS-1123 子域），必须字母开头，
+     * 不允许数字开头、连续 - 、首尾 -。
      */
-    public static final String CODE_REGEX = "^[a-z]+(-[a-z]+)*$";
+    public static final String CODE_REGEX = "^[a-z][a-z0-9]*(-[a-z0-9]+)*$";
 
     // ===== 任务模板提示信息 =====
 
@@ -116,7 +118,7 @@ public final class TaskTemplateConstants {
      * 任务模板编码格式不正确（参数：task_template_code）
      */
     public static final String MSG_TEMPLATE_CODE_FORMAT_INVALID =
-            "任务模板编码格式不正确，需为小写字母并用 - 连接的多段格式，如 a、a-b、a-b-c，传入：%s";
+            "任务模板编码格式不正确，需为小写字母开头的多段格式（段内可含数字）并用 - 连接，如 a、a-b、k8s-deploy-via-api，传入：%s";
 
     /**
      * 任务模板编码与流水线模板编码冲突（参数：code）
