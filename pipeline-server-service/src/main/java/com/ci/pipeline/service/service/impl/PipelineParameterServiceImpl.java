@@ -29,6 +29,7 @@ import com.ci.pipeline.facade.response.PageResponse;
 import com.ci.pipeline.facade.response.PipelineParameterResponse;
 import com.ci.pipeline.facade.response.PipelineRunParameterResponse;
 import com.ci.pipeline.service.service.DistributedLockService;
+import com.ci.pipeline.service.service.DictDataService;
 import com.ci.pipeline.service.service.PipelineParameterService;
 import com.ci.pipeline.service.strategy.pipeline.parameter.PipelineParameterStrategyManager;
 import com.ci.pipeline.service.strategy.ParamResolveContext;
@@ -87,6 +88,9 @@ public class PipelineParameterServiceImpl implements PipelineParameterService {
 
     @Autowired
     private DistributedLockService distributedLockService;
+
+    @Autowired
+    private DictDataService dictDataService;
 
     // ============================== CRUD ==============================
 
@@ -276,16 +280,11 @@ public class PipelineParameterServiceImpl implements PipelineParameterService {
         }
 
         // 7. 过滤掉 system 参数，只返回 user 参数
-        // 8. 按 param_group + param_group_sort 排序返回
-        return sortedParams.stream()
+        // 8. 按分组字典 dict_sort 降序（组间）+ param_group_sort 降序（组内）排序返回
+        return sortRunParameterResponses(sortedParams.stream()
                 .filter(p -> !ParamTypeEnum.SYSTEM.getCode().equals(p.getParamType()))
                 .map(p -> toRunParameterResponse(p, resolvedValues))
-                .sorted(Comparator
-                        .comparing(PipelineRunParameterResponse::getParamGroup,
-                                Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(PipelineRunParameterResponse::getParamGroupSort,
-                                Comparator.nullsLast(Comparator.naturalOrder())))
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
     }
 
     // ============================== 参数联动刷新 ==============================
@@ -360,16 +359,39 @@ public class PipelineParameterServiceImpl implements PipelineParameterService {
             }
         }
 
-        // 6. 返回全量 user 参数（含重新计算的值和过滤后的选项）
-        return sortedParams.stream()
+        // 6. 返回全量 user 参数（含重新计算的值和过滤后的选项），按分组字典 dict_sort 降序（组间）+ param_group_sort 降序（组内）排序
+        return sortRunParameterResponses(sortedParams.stream()
                 .filter(p -> !ParamTypeEnum.SYSTEM.getCode().equals(p.getParamType()))
                 .map(p -> toRunParameterResponse(p, resolvedValues))
-                .sorted(Comparator
-                        .comparing(PipelineRunParameterResponse::getParamGroup,
-                                Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(PipelineRunParameterResponse::getParamGroupSort,
-                                Comparator.nullsLast(Comparator.naturalOrder())))
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
+    }
+
+    /**
+     * 按分组字典排序规则对返回参数排序：组间按字典 dict_sort 降序（未配置的组排在最后、组名升序），
+     * 组内按 param_group_sort 降序（null 排在最后），并将组间排序值回填到 groupSort 字段。
+     */
+    private List<PipelineRunParameterResponse> sortRunParameterResponses(List<PipelineRunParameterResponse> responses) {
+        // 查分组字典，构建 组名 → dict_sort 映射
+        Map<String, Integer> groupSortMap = new HashMap<>();
+        try {
+            dictDataService.listByDictType(PipelineParameterConstants.DICT_TYPE_PIPELINE_PARAMETER_GROUP)
+                    .forEach(d -> groupSortMap.put(d.getDictValue(), d.getDictSort()));
+        } catch (Exception e) {
+            // 字典查询失败不阻断参数返回，降级为按组名排序
+            log.warn("查询参数分组字典失败，降级为按组名排序", e);
+        }
+
+        for (PipelineRunParameterResponse response : responses) {
+            response.setGroupSort(groupSortMap.get(response.getParamGroup()));
+        }
+        responses.sort(Comparator
+                .comparing(PipelineRunParameterResponse::getGroupSort,
+                        Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(PipelineRunParameterResponse::getParamGroup,
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(PipelineRunParameterResponse::getParamGroupSort,
+                        Comparator.nullsLast(Comparator.reverseOrder())));
+        return responses;
     }
 
     /**

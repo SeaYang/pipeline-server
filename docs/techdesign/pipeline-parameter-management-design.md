@@ -404,7 +404,7 @@ public class PipelineParametersRefreshRequest implements Serializable {
      └── paramType = user → DefaultValueStrategyManager.resolve(name, config, context)
            └── 按 priority 降序遍历策略，取第一个非 null；全 null 用 defaultValue
 7. 过滤掉 paramType = system 的参数，只返回 user 参数给前端
-8. 按 param_group + param_group_sort 排序返回
+8. 排序返回：组间按分组字典 dict_sort 降序（未配置的组排最后、组名升序），组内按 param_group_sort 降序
 ```
 
 #### 4.3.3 参数刷新流程（`refreshParameters` 接口）
@@ -436,6 +436,7 @@ public class PipelineRunParameterResponse implements Serializable {
     private String regexPattern;
     private String paramGroup;
     private Integer paramGroupSort;
+    private Integer groupSort;            // 组间排序值（字典 dict_sort，越大越靠前）
     private String value;                 // 当前值（已计算）
     private List<OptionItem> options;     // 过滤后的可见选项（select/radio 用）
     private Boolean hidden;               // 是否隐藏（条件不满足时）
@@ -636,7 +637,7 @@ emit('success', workflowName: string)
 | `disabled-input` | `el-input` + `disabled` | 只读展示 |
 | `hidden` | 不渲染 | — |
 
-**参数分组展示**：按 `paramGroup` 分组，组内按 `paramGroupSort` 排序，使用 `el-collapse` 或分区标题展示。
+**参数分组展示**：按 `paramGroup` 分组，组间按字典 `pipeline-parameter-group` 的 `dict_sort` 降序，组内按 `paramGroupSort` 降序，使用 `el-collapse` 或分区标题展示。
 
 ### 5.3 联动刷新交互
 

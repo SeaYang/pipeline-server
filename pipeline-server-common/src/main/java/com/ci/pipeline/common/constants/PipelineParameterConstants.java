@@ -31,6 +31,10 @@ public final class PipelineParameterConstants {
     // ---- 参数刷新 ----
     public static final String MSG_CHANGED_PARAM_NAME_REQUIRED = "变动的参数名不能为空";
 
+    // ---- 参数分组字典 ----
+    /** 参数分组字典类型（dict_data.dict_type），dict_sort 定义组间展示顺序 */
+    public static final String DICT_TYPE_PIPELINE_PARAMETER_GROUP = "pipeline-parameter-group";
+
     // ---- 执行参数校验 ----
     public static final String MSG_PARAM_REQUIRED = "参数[%s]不能为空";
     public static final String MSG_PARAM_REGEX_FAIL = "参数[%s]格式不正确";
