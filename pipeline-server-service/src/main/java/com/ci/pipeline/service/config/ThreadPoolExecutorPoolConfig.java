@@ -17,7 +17,6 @@ import java.util.concurrent.TimeUnit;
  * 本场景下异步任务为「轮询 Argo 到终态」的长任务，但本项目为手动触发的 CI 工具，
  * 并发执行极少，core + queue 几乎不会被打满，CallerRunsPolicy 实际不会触发；
  * 一旦触发也会在线程池侧降级为调用方线程执行，配合兜底同步接口可保证状态最终一致。
- * <p>未引入参考实现里的 {@code TaskDecorator}：它依赖 tuhu MDC / {@code RequestContextHolder}，
  * 而状态同步在异步线程中执行、不持有请求上下文，无需拷贝。
  */
 @Slf4j

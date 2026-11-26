@@ -9,6 +9,7 @@ public enum ComponentTypeEnum {
     INPUT("input", "输入框"),
     SELECT("select", "下拉框"),
     RADIO("radio", "单选框组"),
+    SWITCH("switch", "开关"),
     GIT_TREE("git-tree", "Git目录树"),
     DISABLED_INPUT("disabled-input", "只读输入框"),
     HIDDEN("hidden", "隐藏");

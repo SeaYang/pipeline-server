@@ -862,6 +862,7 @@ public class PipelineParameterServiceImpl implements PipelineParameterService {
                 ComponentTypeEnum.INPUT.getCode(),
                 ComponentTypeEnum.SELECT.getCode(),
                 ComponentTypeEnum.RADIO.getCode(),
+                ComponentTypeEnum.SWITCH.getCode(),
                 ComponentTypeEnum.GIT_TREE.getCode());
         List<PipelineParameter> list = pipelineParameterRepository
                 .listByComponentTypesAndParamType(componentTypes, ParamTypeEnum.USER.getCode());

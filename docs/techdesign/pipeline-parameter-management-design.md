@@ -197,6 +197,7 @@ JSON 数组格式，元素为参数名字符串：
 | `input` | 输入框 | 文本输入 |
 | `select` | 下拉框 | 选项来自 `option_config` |
 | `radio` | 单选框组 | 选项来自 `option_config` |
+| `switch` | 开关 | 布尔值，值以字符串 `true`/`false` 提交 |
 | `git-tree` | Git目录树 | Git 仓库目录树选择器 |
 | `disabled-input` | 只读输入框 | 系统填充，用户不可改 |
 | `hidden` | 隐藏 | 不展示 |
@@ -633,6 +634,7 @@ emit('success', workflowName: string)
 | `input` | `el-input` | 文本输入 |
 | `select` | `el-select` + `el-option` | 选项来自 `options` |
 | `radio` | `el-radio-group` + `el-radio` | 选项来自 `options` |
+| `switch` | `el-switch` | 布尔值开关，`active-value="true"` / `inactive-value="false"`，无值时默认 `false` |
 | `git-tree` | `GitTreeSelector.vue`（新增） | Git 目录树选择（首期可简化为 input） |
 | `disabled-input` | `el-input` + `disabled` | 只读展示 |
 | `hidden` | 不渲染 | — |
