@@ -60,7 +60,7 @@ public interface PipelineParameterService {
     List<PipelineRunParameterResponse> refreshParameters(PipelineParametersRefreshRequest request);
 
     /**
-     * 查询可配置的参数列表（component_type 为 INPUT/SELECT/RADIO/GIT_TREE 且 param_type 为 user）。
+     * 查询可配置的参数列表（component_type 为 INPUT/SELECT/RADIO/SWITCH/GIT_TREE 且 param_type 为 user）。
      *
      * @return 可配置参数选项列表
      */

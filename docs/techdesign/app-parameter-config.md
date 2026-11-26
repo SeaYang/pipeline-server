@@ -262,7 +262,7 @@ public Result<AppInfoResponse> getByAppName(@RequestParam("appName") String appN
 查询可配置的参数列表（用于新增弹框的参数名下拉）。
 
 查询条件：
-- `component_type` IN (`input`, `select`, `radio`, `git-tree`)
+- `component_type` IN (`input`, `select`, `radio`, `switch`, `git-tree`)
 - `param_type` = `user`
 
 返回字段：`name`、`label`、`component_type`、`param_type`、`option_config`
@@ -306,12 +306,13 @@ List<PipelineParameterOptionResponse> listConfigurableParameters();
 
 实现逻辑：
 ```java
-// component_type IN (input, select, radio, git-tree) AND param_type = 'user'
+// component_type IN (input, select, radio, switch, git-tree) AND param_type = 'user'
 LambdaQueryWrapper<PipelineParameter> wrapper = new LambdaQueryWrapper<>();
 wrapper.in(PipelineParameter::getComponentType,
             ComponentTypeEnum.INPUT.getCode(),
             ComponentTypeEnum.SELECT.getCode(),
             ComponentTypeEnum.RADIO.getCode(),
+            ComponentTypeEnum.SWITCH.getCode(),
             ComponentTypeEnum.GIT_TREE.getCode())
        .eq(PipelineParameter::getParamType, "user");
 List<PipelineParameter> list = parameterMapper.selectList(wrapper);
@@ -497,6 +498,7 @@ flowchart TD
 | `input` | `<el-input>` | 普通输入框 |
 | `select` | `<el-select>` + `<el-option>` | 解析 `optionConfig`，展示 value 列表 |
 | `radio` | `<el-select>` + `<el-option>` | **与 select 相同**，解析 `optionConfig`，展示 value 列表 |
+| `switch` | `<el-switch>` | 布尔值开关，值以字符串 `true`/`false` 保存，无值时默认 `false` |
 | `git-tree` | `<GitTreeSelect :appName="appName">` | 复用现有组件，传入 appName |
 
 > **注意**：`radio` 类型统一使用 `<el-select>` 下拉选择组件渲染，不使用 `<el-radio-group>`。
